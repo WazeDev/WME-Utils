@@ -1,7 +1,7 @@
  // ==UserScript==
 // @name        WME Place Harmonizer Beta
 // @namespace   
-// @version     0.1
+// @version     0.2
 // @description 
 // @author      WazeUSA
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/.*$/
