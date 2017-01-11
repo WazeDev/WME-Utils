@@ -14,6 +14,7 @@
     WMECommon.EnhancedGoogleLinks._googleLinkHash = {};
     WMECommon.EnhancedGoogleLinks.run = function () {
         // MutationObserver will be notified when Google place ID divs are added, then update them to be hyperlinks.
+        debugger;
         var observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 // Mutation is a NodeList and doesn't support forEach like an array
