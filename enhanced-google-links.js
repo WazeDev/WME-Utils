@@ -1,7 +1,7 @@
  // ==UserScript==
 // @name        WME Place Harmonizer Beta
 // @namespace   
-// @version     0.2
+// @version     0.3
 // @description 
 // @author      WazeUSA
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/.*$/
@@ -9,7 +9,7 @@
  
  var WMECommon = WMECommon || {};
     
-    alert('loaded 2');
+    alert('loaded 3');
     WMECommon.EnhancedGoogleLinks = {};
     WMECommon.EnhancedGoogleLinks._googleLinkHash = {};
     WMECommon.EnhancedGoogleLinks.run = function () {
