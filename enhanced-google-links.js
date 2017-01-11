@@ -1,4 +1,4 @@
-    WMECommon = WMECommon || {};
+    var WMECommon = WMECommon || {};
     
     WMECommon.EnhancedGoogleLinks = {};
     WMECommon.EnhancedGoogleLinks._googleLinkHash = {};
