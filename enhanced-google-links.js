@@ -9,7 +9,7 @@
  
  var WMECommon = WMECommon || {};
     
-    alert('loaded');
+    alert('loaded 2');
     WMECommon.EnhancedGoogleLinks = {};
     WMECommon.EnhancedGoogleLinks._googleLinkHash = {};
     WMECommon.EnhancedGoogleLinks.run = function () {
