@@ -1,5 +1,6 @@
     var WMECommon = WMECommon || {};
     
+    alert('loaded');
     WMECommon.EnhancedGoogleLinks = {};
     WMECommon.EnhancedGoogleLinks._googleLinkHash = {};
     WMECommon.EnhancedGoogleLinks.run = function () {
