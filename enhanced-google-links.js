@@ -1,5 +1,8 @@
-    var _googleLinkHash = {};
-    function enhanceGoogleLinks() {
+    WMECommon = WMECommon || {};
+    
+    WMECommon.EnhancedGoogleLinks = {};
+    WMECommon.EnhancedGoogleLinks._googleLinkHash = {};
+    WMECommon.EnhancedGoogleLinks.run = function () {
         // MutationObserver will be notified when Google place ID divs are added, then update them to be hyperlinks.
         var observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
