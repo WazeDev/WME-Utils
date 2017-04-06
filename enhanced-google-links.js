@@ -2,7 +2,7 @@
 // @name        WME Place Harmonizer Beta
 // @description Try to take over the world!!!
 // @namespace   
-// @version     0.3
+// @version     0.4
 // @author      WazeUSA
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/.*$/
 // ==/UserScript==
