@@ -2,7 +2,7 @@
 // @name        WME Common Beta
 // @description Try to take over the world!!!
 // @namespace   
-// @version     0.5
+// @version     0.6
 // @author      WazeUSA
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/.*$/
 // ==/UserScript==
