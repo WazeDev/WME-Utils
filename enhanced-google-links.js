@@ -1,5 +1,6 @@
  // ==UserScript==
 // @name        WME Place Harmonizer Beta
+// @description Try to take over the world!!!
 // @namespace   
 // @version     0.3
 // @description 
