@@ -1,5 +1,5 @@
  // ==UserScript==
-// @name        WME Common Beta
+// @name        WME Common
 // @description Try to take over the world!!!
 // @namespace   
 // @version     1.2
