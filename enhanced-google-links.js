@@ -3,7 +3,6 @@
 // @description Try to take over the world!!!
 // @namespace   
 // @version     0.3
-// @description 
 // @author      WazeUSA
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/.*$/
 // ==/UserScript==
