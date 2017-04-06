@@ -2,11 +2,12 @@
 // @name        WME Common Beta
 // @description Try to take over the world!!!
 // @namespace   
-// @version     0.6
+// @version     1.2
 // @author      WazeUSA
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/.*$/
 // ==/UserScript==
  
+MWAAHAAHAA
  var WMECommon = WMECommon || {};
     
     alert('loaded 0.3');
