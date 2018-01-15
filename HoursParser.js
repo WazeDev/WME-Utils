@@ -1,4 +1,6 @@
+// ==UserScript==
 // @version 2018.01.15.001
+// ==/UserScript==
 
 class HoursParser {
     constructor() {
