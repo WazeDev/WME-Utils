@@ -3,6 +3,7 @@
 // ==/UserScript==
 
 class HoursParser {
+    // Class constructor
     constructor() {
         this.DAYS_OF_THE_WEEK = {
             SS: ['saturdays', 'saturday', 'satur', 'sat', 'sa'],
