@@ -1,5 +1,6 @@
 // ==UserScript==
 // @name            WME Utils - HoursParser
+// @namespace       WazeDev
 // @version         2018.01.15.004
 // @description     Parses a text string into hours, for use in Waze Map Editor scripts
 // @author          MapOMatic (originally developed by bmtg)
