@@ -1,5 +1,6 @@
 // ==UserScript==
-// @version 2018.01.15.002
+// @name     WME Utils - HoursParser
+// @version  2018.01.15.003
 // ==/UserScript==
 
 class HoursParser {
