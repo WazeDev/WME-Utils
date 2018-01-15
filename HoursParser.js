@@ -1,3 +1,5 @@
+// @version 2018.01.15.001
+
 class HoursParser {
     constructor() {
         this.DAYS_OF_THE_WEEK = {
