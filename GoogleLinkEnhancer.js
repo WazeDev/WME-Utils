@@ -110,6 +110,7 @@ class GoogleLinkEnhancer {
         $(document).on('ajaxSuccess', null, this, this._onAjaxSuccess);
         $('#map').on('mouseenter', null, this, this._onMapMouseenter);
         W.model.venues.on('objectschanged', this._formatLinkElements, this);
+        this._processPlaces();
         this._cleanAndSaveLinkCache();
         this._cacheCleanIntervalID = setInterval(() => this._cleanAndSaveLinkCache(), 1000 * 60 * this.LINK_CACHE_CLEAN_INTERVAL_MIN);
     }
@@ -123,6 +124,7 @@ class GoogleLinkEnhancer {
         W.model.venues.off('objectschanged', this._formatLinkElements, this);
         if (this._cacheCleanIntervalID) clearInterval(this._cacheCleanIntervalID);
         this._cleanAndSaveLinkCache();
+        this._mapLayer.removeAllFeatures();
     }
 
     _cleanAndSaveLinkCache() {
@@ -145,24 +147,26 @@ class GoogleLinkEnhancer {
     }
 
     _processPlaces() {
-        let that = this;
-        this._mapLayer.removeAllFeatures();
-        W.model.venues.getObjectArray().forEach(function(venue) {
-            venue.attributes.externalProviderIDs.forEach(provID => {
-                let id = provID.attributes.uuid;
-                that._getLinkInfoAsync(id).then(link => {
-                    if (link.closed || link.notFound) {
-                        let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
-                        let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                        let width = venue.isPoint() ? '4' : '12';
-                        let color = link.notFound ? '#FF00FF' : '#FF0000';
-                        that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, {strokeWidth:width, strokeColor:color, strokeDashstyle:dashStyle})]);
-                    }
-                }).catch(res => {
-                    console.log(res);
+        if (this._enabled) {
+            let that = this;
+            this._mapLayer.removeAllFeatures();
+            W.model.venues.getObjectArray().forEach(function(venue) {
+                venue.attributes.externalProviderIDs.forEach(provID => {
+                    let id = provID.attributes.uuid;
+                    that._getLinkInfoAsync(id).then(link => {
+                        if (link.closed || link.notFound) {
+                            let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
+                            let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                            let width = venue.isPoint() ? '4' : '12';
+                            let color = link.notFound ? '#FF00FF' : '#FF0000';
+                            that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, {strokeWidth:width, strokeColor:color, strokeDashstyle:dashStyle})]);
+                        }
+                    }).catch(res => {
+                        console.log(res);
+                    });
                 });
             });
-        });
+        }
     }
 
     _cacheLink(id, link) {
