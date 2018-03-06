@@ -152,7 +152,7 @@ class GoogleLinkEnhancer {
                 let id = provID.attributes.uuid;
                 that._getLinkInfoAsync(id).then(link => {
                     if (link.closed || link.notFound) {
-                        let dashStyle = link.closed && /(\(|- )(permanently )?closed\)?$/i.test(venue.attributes.name) ? venue.isPoint() ? '2 6' : '2 16' : 'solid';
+                        let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
                         let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
                         let width = venue.isPoint() ? '4' : '12';
                         let color = link.notFound ? '#FF00FF' : '#FF0000';
