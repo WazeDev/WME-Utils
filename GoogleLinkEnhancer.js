@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.06.001
+// @version      2018.03.07.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -12,14 +12,23 @@ class GoogleLinkEnhancer {
 
     constructor() {
         this.EXT_PROV_ELEM_QUERY = 'li.external-provider-item';
-        this.CLOSED_PLACE_TEXT = 'Google indicates this place is permanently closed.\nVerify with other sources or the editor community before deleting.';
         this.LINK_CACHE_NAME = 'gle_link_cache';
         this.LINK_CACHE_CLEAN_INTERVAL_MIN = 3;   // Interval to remove old links and save new ones.
         this.LINK_CACHE_LIFESPAN_HR = 6;          // Remove old links when they exceed this time limit.
         this._enabled = false;
         this._mapLayer = null;
         this._urlOrigin = window.location.origin;
-        this._settings = {};
+        this._distanceLimit = 400;                // Default distance (meters) when Waze place is flagged for being too far from Google place.
+                                                  // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
+
+        this.strings = {};
+        this.strings.closedPlace = 'Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.';
+        this.strings.multiLinked = 'Linked more than once already. Please find and remove multiple links.';
+        this.strings.linkedToThisPlace = 'Already linked to this place';
+        this.strings.linkedNearby = 'Already linked to a nearby place';
+        this.strings.linkedToXPlaces = 'This is linked to {0} places';
+        this.strings.badLink = 'Invalid Google link.  Please remove it.';
+        this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
         this._initLZString();
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
@@ -127,6 +136,16 @@ class GoogleLinkEnhancer {
         this._mapLayer.removeAllFeatures();
     }
 
+    // The distance (in meters) before flagging a Waze place that is too far from the linked Google place.
+    // Area places use distanceLimit, plus the distance from the centroid of the AP to its furthest node.
+    get distanceLimit() {
+        return this._distanceLimit;
+    }
+    set distanceLimit(value) {
+        this._distanceLimit = value;
+        this._processPlaces();
+    }
+
     _cleanAndSaveLinkCache() {
         if (!this._linkCache) return;
         let now = new Date();
@@ -146,26 +165,72 @@ class GoogleLinkEnhancer {
         //console.log('link cache count: ' + Object.keys(this._linkCache).length, this._linkCache);
     }
 
+    _distanceBetweenPoints(x1, y1, x2, y2) {
+        return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
+    }
+
+    _isLinkTooFar(link, venue) {
+        if (link.loc) {
+            let linkPt = new OL.Geometry.Point(link.loc.lng, link.loc.lat);
+            linkPt.transform(W.map.displayProjection, W.map.projection);
+            let venuePt;
+            let distanceLimit;
+            if (venue.isPoint()) {
+                venuePt = venue.geometry.getCentroid();
+                distanceLimit = this.distanceLimit;
+            } else {
+                let bounds = venue.geometry.getBounds();
+                let center = bounds.getCenterLonLat();
+                venuePt = {x: center.lon, y: center.lat};
+                distanceLimit = this._distanceBetweenPoints(center.lon, center.lat, bounds.right, bounds.top) + this.distanceLimit;
+            }
+            let distance = this._distanceBetweenPoints(linkPt.x, linkPt.y, venuePt.x, venuePt.y);
+
+            return distance > distanceLimit;
+        } else {
+            return false;
+        }
+    }
+
     _processPlaces() {
-        if (this._enabled) {
-            let that = this;
-            this._mapLayer.removeAllFeatures();
-            W.model.venues.getObjectArray().forEach(function(venue) {
-                venue.attributes.externalProviderIDs.forEach(provID => {
-                    let id = provID.attributes.uuid;
-                    that._getLinkInfoAsync(id).then(link => {
-                        if (link.closed || link.notFound) {
-                            let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
-                            let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                            let width = venue.isPoint() ? '4' : '12';
-                            let color = link.notFound ? '#FF00FF' : '#FF0000';
-                            that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, {strokeWidth:width, strokeColor:color, strokeDashstyle:dashStyle})]);
-                        }
-                    }).catch(res => {
-                        console.log(res);
+        try {
+            if (this._enabled) {
+                let that = this;
+                let projFrom = W.map.displayProjection;
+                let projTo = W.map.projection;
+                let mapExtent = W.map.getExtent();
+                this._mapLayer.removeAllFeatures();
+                W.model.venues.getObjectArray().forEach(function(venue) {
+                    let isTooFar = false;
+                    venue.attributes.externalProviderIDs.forEach(provID => {
+                        let id = provID.attributes.uuid;
+                        that._getLinkInfoAsync(id).then(link => {
+                            // Check for distance from Google POI.
+                            if (that._isLinkTooFar(link, venue) && !isTooFar) {
+                                isTooFar = true;
+                                let venuePt = venue.geometry.getCentroid();
+                                let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
+                                let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
+                                let width = venue.isPoint() ? '4' : '12';
+                                that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, {strokeWidth:width, strokeColor:'#0FF', strokeDashstyle:dashStyle})]);
+                            }
+
+                            // Check for closed places or invalid Google links.
+                            if (link.closed || link.notFound) {
+                                let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
+                                let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                                let width = venue.isPoint() ? '4' : '12';
+                                let color = link.notFound ? '#F0F' : '#F00';
+                                that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, {strokeWidth:width, strokeColor:color, strokeDashstyle:dashStyle})]);
+                            }
+                        }).catch(res => {
+                            console.log(res);
+                        });
                     });
                 });
-            });
+            }
+        } catch (ex) {
+            console.log(ex);
         }
     }
 
@@ -208,7 +273,7 @@ class GoogleLinkEnhancer {
             let id = this._getIdFromElement($childEl);
             if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
                 setTimeout(() => {
-                    $childEl.find('div.uuid').css({backgroundColor:'#FF0'}).attr({'title':'This is linked to ' + existingLinks[id].count.toString() + ' places'});
+                    $childEl.find('div.uuid').css({backgroundColor:'#FF0'}).attr({'title':this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count)});
                 }, 50);
             }
             this._addHoverEvent($(childEl));
@@ -218,8 +283,19 @@ class GoogleLinkEnhancer {
                 if (link.closed) {
                     // A delay is needed to allow the UI to do its formatting so it doesn't overwrite ours.
                     setTimeout(() => {
-                        $childEl.find('div.uuid').css({backgroundColor:'#FAA'}).attr('title',this.CLOSED_PLACE_TEXT);
+                        $childEl.find('div.uuid').css({backgroundColor:'#FAA'}).attr('title',this.strings.closedPlace);
                     }, 50);
+                } else if (link.notFound) {
+                    setTimeout(() => {
+                        $childEl.find('div.uuid').css({backgroundColor:'#F0F'}).attr('title',this.strings.badLink);
+                    }, 50);
+                } else {
+                    let venue = W.selectionManager.selectedItems[0].model;
+                    if (this._isLinkTooFar(link, venue)) {
+                        setTimeout(() => {
+                            $childEl.find('div.uuid').css({backgroundColor:'#0FF'}).attr('title',this.strings.tooFar.replace('{0}',this.distanceLimit));
+                        }, 50);
+                    }
                 }
             }
         });
@@ -271,17 +347,17 @@ class GoogleLinkEnhancer {
                     if (link) {
                         let title, bgColor, textColor, fontWeight;
                         if (link.count > 1) {
-                            title = 'Linked more than once already.  Please find and remove multiple links.';
+                            title = this.strings.multiLinked;
                             textColor = '#000';
                             bgColor = '#FF0';
                         } else {
                             bgColor = '#ddd';
                             if (link.isThisVenue) {
-                                title = 'Already linked to this place';
+                                title = this.strings.linkedToThisPlace;
                                 textColor = '#444';
                                 fontWeight = 600;
                             } else {
-                                title = 'Already linked to a nearby place';
+                                title = this.strings.linkedNearby;
                                 textColor = '#888';
                             }
                         }
