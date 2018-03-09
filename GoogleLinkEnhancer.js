@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.07.001
+// @version      2018.03.09.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -33,7 +33,8 @@ class GoogleLinkEnhancer {
         this._initLZString();
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
         this._linkCache = storedCache ? $.parseJSON(this._LZString.decompress(storedCache)) : {};
-
+        if (this._linkCache === null) this._linkCache = {};
+        
         this._initLayer();
 
         // Watch for ext provider elements being added to the DOM, and add hover events.
