@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.09.001
+// @version      2018.03.12.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -34,7 +34,7 @@ class GoogleLinkEnhancer {
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
         this._linkCache = storedCache ? $.parseJSON(this._LZString.decompress(storedCache)) : {};
         if (this._linkCache === null) this._linkCache = {};
-        
+
         this._initLayer();
 
         // Watch for ext provider elements being added to the DOM, and add hover events.
@@ -274,7 +274,7 @@ class GoogleLinkEnhancer {
             let id = this._getIdFromElement($childEl);
             if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
                 setTimeout(() => {
-                    $childEl.find('div.uuid').css({backgroundColor:'#FF0'}).attr({'title':this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count)});
+                    $childEl.find('div.uuid').css({backgroundColor:'#FFA500'}).attr({'title':this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count)});
                 }, 50);
             }
             this._addHoverEvent($(childEl));
@@ -348,17 +348,17 @@ class GoogleLinkEnhancer {
                     if (link) {
                         let title, bgColor, textColor, fontWeight;
                         if (link.count > 1) {
-                            title = this.strings.multiLinked;
+                            title = that.strings.multiLinked;
                             textColor = '#000';
-                            bgColor = '#FF0';
+                            bgColor = '#FFA500';
                         } else {
                             bgColor = '#ddd';
                             if (link.isThisVenue) {
-                                title = this.strings.linkedToThisPlace;
+                                title = that.strings.linkedToThisPlace;
                                 textColor = '#444';
                                 fontWeight = 600;
                             } else {
-                                title = this.strings.linkedNearby;
+                                title = that.strings.linkedNearby;
                                 textColor = '#888';
                             }
                         }
@@ -412,8 +412,8 @@ class GoogleLinkEnhancer {
                     this._feature = new OL.Feature.Vector(pt,{poiCoord:true},{
                         pointRadius: 6,
                         strokeWidth: 30,
-                        strokeColor: '#FFA500',
-                        fillColor: '#FFA500',
+                        strokeColor: '#FF0',
+                        fillColor: '#FF0',
                         strokeOpacity: 0.5
                     });
                     W.map.getLayerByUniqueName('landmarks').addFeatures([this._feature]);
