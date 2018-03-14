@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.12.001
+// @version      2018.03.14.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -13,7 +13,7 @@ class GoogleLinkEnhancer {
     constructor() {
         this.EXT_PROV_ELEM_QUERY = 'li.external-provider-item';
         this.LINK_CACHE_NAME = 'gle_link_cache';
-        this.LINK_CACHE_CLEAN_INTERVAL_MIN = 3;   // Interval to remove old links and save new ones.
+        this.LINK_CACHE_CLEAN_INTERVAL_MIN = 1;   // Interval to remove old links and save new ones.
         this.LINK_CACHE_LIFESPAN_HR = 6;          // Remove old links when they exceed this time limit.
         this._enabled = false;
         this._mapLayer = null;
@@ -31,6 +31,7 @@ class GoogleLinkEnhancer {
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
         this._initLZString();
+
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
         this._linkCache = storedCache ? $.parseJSON(this._LZString.decompress(storedCache)) : {};
         if (this._linkCache === null) this._linkCache = {};
@@ -119,6 +120,7 @@ class GoogleLinkEnhancer {
         // Note: Using on() allows passing "this" as a variable, so it can be used in the handler function.
         $(document).on('ajaxSuccess', null, this, this._onAjaxSuccess);
         $('#map').on('mouseenter', null, this, this._onMapMouseenter);
+        $(window).on('unload', null, this, this._onWindowUnload);
         W.model.venues.on('objectschanged', this._formatLinkElements, this);
         this._processPlaces();
         this._cleanAndSaveLinkCache();
@@ -131,6 +133,7 @@ class GoogleLinkEnhancer {
         this._linkObserver.disconnect();
         $(document).off('ajaxSuccess', this._onAjaxSuccess);
         $('#map').off('mouseenter', this._onMapMouseenter);
+        $(window).off('unload', null, this, this._onWindowUnload);
         W.model.venues.off('objectschanged', this._formatLinkElements, this);
         if (this._cacheCleanIntervalID) clearInterval(this._cacheCleanIntervalID);
         this._cleanAndSaveLinkCache();
@@ -147,6 +150,10 @@ class GoogleLinkEnhancer {
         this._processPlaces();
     }
 
+    _onWindowUnload(evt) {
+        evt.data._cleanAndSaveLinkCache();
+    }
+
     _cleanAndSaveLinkCache() {
         if (!this._linkCache) return;
         let now = new Date();
@@ -158,7 +165,7 @@ class GoogleLinkEnhancer {
                 delete link.location;
             }
             // Delete link if older than X hours.
-            if (!link.ts || (now - link.ts) > this.LINK_CACHE_LIFESPAN_HR * 3600 * 1000) {
+            if (!link.ts || (now - new Date(link.ts)) > this.LINK_CACHE_LIFESPAN_HR * 3600 * 1000) {
                 delete this._linkCache[id];
             }
         });
