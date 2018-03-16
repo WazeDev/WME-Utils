@@ -420,24 +420,39 @@ class GoogleLinkEnhancer {
                 poiPt.transform(W.map.displayProjection, W.map.projection);
                 let placeGeom = W.selectionManager.selectedItems[0].geometry.getCentroid();
                 let placePt = new OL.Geometry.Point(placeGeom.x, placeGeom.y);
-                //if ( poiPt.intersects(W.map.getExtent().toGeometry()) ) {
-                    this._destroyPoint();  // Just in case it still exists.
-                    this._ptFeature = new OL.Feature.Vector(poiPt,{poiCoord:true},{
-                        pointRadius: 6,
-                        strokeWidth: 30,
-                        strokeColor: '#FF0',
-                        fillColor: '#FF0',
-                        strokeOpacity: 0.5
+                let ext = W.map.getExtent();
+                var lsBounds = new OL.Geometry.LineString([new OL.Geometry.Point(ext.left, ext.bottom), new OL.Geometry.Point(ext.left, ext.top),
+                                                         new OL.Geometry.Point(ext.right, ext.top),new OL.Geometry.Point(ext.right, ext.bottom),new OL.Geometry.Point(ext.left, ext.bottom)]);
+                let lsLine = new OL.Geometry.LineString([placePt, poiPt]);
+
+                // If the line extends outside the bounds, split it so we don't draw a line across the world.
+                let splits = lsLine.splitWith(lsBounds);
+                if (splits) {
+                    let splitPoints;
+                    let split = splits.forEach(split => {
+                        split.components.forEach(component => {
+                            if (component.x === placePt.x && component.y === placePt.y) splitPoints = split;
+                        });
                     });
-                    this._lineFeature = new OL.Feature.Vector(new OL.Geometry.LineString([placePt, poiPt]), {}, {
-                        strokeWidth: 3,
-                        strokeDashstyle: '12 8',
-                        strokeColor: '#FF0',
-                        //strokeOpacity: 0.9
-                    });
-                    W.map.getLayerByUniqueName('landmarks').addFeatures([this._ptFeature, this._lineFeature]);
-                    this._timeoutDestroyPoint();
-                //}
+                    lsLine = new OL.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
+                }
+
+                this._destroyPoint();  // Just in case it still exists.
+                this._ptFeature = new OL.Feature.Vector(poiPt,{poiCoord:true},{
+                    pointRadius: 6,
+                    strokeWidth: 30,
+                    strokeColor: '#FF0',
+                    fillColor: '#FF0',
+                    strokeOpacity: 0.5
+                });
+                this._lineFeature = new OL.Feature.Vector(lsLine, {}, {
+                                                          strokeWidth: 3,
+                                                          strokeDashstyle: '12 8',
+                                                          strokeColor: '#FF0',
+                                                          });
+                W.map.getLayerByUniqueName('landmarks').addFeatures([this._ptFeature, this._lineFeature]);
+                this._timeoutDestroyPoint();
+                
             }
         } else {
             $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
