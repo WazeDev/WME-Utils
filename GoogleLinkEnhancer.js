@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.14.001
+// @version      2018.03.16.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -84,10 +84,10 @@ class GoogleLinkEnhancer {
 
 
     _initLayer(){
-        this._mapLayer = new OpenLayers.Layer.Vector('Google Link Enhancements.', {
+        this._mapLayer = new OL.Layer.Vector('Google Link Enhancements.', {
             uniqueName: '___GoogleLinkEnhancements',
             displayInLayerSwitcher: true,
-            styleMap: new OpenLayers.StyleMap({
+            styleMap: new OL.StyleMap({
                 default: {
                     strokeColor: '${strokeColor}',
                     strokeWidth: '${strokeWidth}',
@@ -220,7 +220,7 @@ class GoogleLinkEnhancer {
                                 let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
                                 let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
                                 let width = venue.isPoint() ? '4' : '12';
-                                that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, {strokeWidth:width, strokeColor:'#0FF', strokeDashstyle:dashStyle})]);
+                                that._mapLayer.addFeatures([new OL.Feature.Vector(geometry, {strokeWidth:width, strokeColor:'#0FF', strokeDashstyle:dashStyle})]);
                             }
 
                             // Check for closed places or invalid Google links.
@@ -229,7 +229,7 @@ class GoogleLinkEnhancer {
                                 let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
                                 let width = venue.isPoint() ? '4' : '12';
                                 let color = link.notFound ? '#F0F' : '#F00';
-                                that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, {strokeWidth:width, strokeColor:color, strokeDashstyle:dashStyle})]);
+                                that._mapLayer.addFeatures([new OL.Feature.Vector(geometry, {strokeWidth:width, strokeColor:color, strokeDashstyle:dashStyle})]);
                             }
                         }).catch(res => {
                             console.log(res);
@@ -401,8 +401,12 @@ class GoogleLinkEnhancer {
 
     // Remove the POI point from the map.
     _destroyPoint() {
-        if (this._feature) this._feature.destroy();
-        this._feature = null;
+        if (this._ptFeature) {
+            this._ptFeature.destroy();
+            this._ptFeature = null;
+            this._lineFeature.destroy();
+            this._lineFeature = null;
+        }
     }
 
     // Add the POI point to the map.
@@ -412,20 +416,28 @@ class GoogleLinkEnhancer {
         if (link) {
             if (!link.notFound) {
                 let coord = link.loc;
-                let pt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
-                pt.transform(W.map.displayProjection, W.map.projection);
-                if ( pt.intersects(W.map.getExtent().toGeometry()) ) {
+                let poiPt = new OL.Geometry.Point(coord.lng, coord.lat);
+                poiPt.transform(W.map.displayProjection, W.map.projection);
+                let placeGeom = W.selectionManager.selectedItems[0].geometry.getCentroid();
+                let placePt = new OL.Geometry.Point(placeGeom.x, placeGeom.y);
+                //if ( poiPt.intersects(W.map.getExtent().toGeometry()) ) {
                     this._destroyPoint();  // Just in case it still exists.
-                    this._feature = new OL.Feature.Vector(pt,{poiCoord:true},{
+                    this._ptFeature = new OL.Feature.Vector(poiPt,{poiCoord:true},{
                         pointRadius: 6,
                         strokeWidth: 30,
                         strokeColor: '#FF0',
                         fillColor: '#FF0',
                         strokeOpacity: 0.5
                     });
-                    W.map.getLayerByUniqueName('landmarks').addFeatures([this._feature]);
+                    this._lineFeature = new OL.Feature.Vector(new OL.Geometry.LineString([placePt, poiPt]), {}, {
+                        strokeWidth: 3,
+                        strokeDashstyle: '12 8',
+                        strokeColor: '#FF0',
+                        //strokeOpacity: 0.9
+                    });
+                    W.map.getLayerByUniqueName('landmarks').addFeatures([this._ptFeature, this._lineFeature]);
                     this._timeoutDestroyPoint();
-                }
+                //}
             }
         } else {
             $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
