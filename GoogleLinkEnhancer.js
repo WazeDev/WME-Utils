@@ -1,12 +1,18 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.16.002
+// @version      2018.03.25.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
 // @license      GNU GPLv3
 // ==/UserScript==
+
+/* global $ */
+/* global OL */
+/* global Promise */
+/* global W */
+/* global Node */
 
 class GoogleLinkEnhancer {
 
@@ -427,14 +433,34 @@ class GoogleLinkEnhancer {
 
                 // If the line extends outside the bounds, split it so we don't draw a line across the world.
                 let splits = lsLine.splitWith(lsBounds);
+                let label = '';
                 if (splits) {
                     let splitPoints;
-                    let split = splits.forEach(split => {
+                    splits.forEach(split => {
                         split.components.forEach(component => {
                             if (component.x === placePt.x && component.y === placePt.y) splitPoints = split;
                         });
                     });
                     lsLine = new OL.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
+                    let distance = poiPt.distanceTo(placePt);
+                    let unitConversion, unit1, unit2;
+                    if (W.model.isImperial) {
+                        distance *= 3.28084;
+                        unitConversion = 5280;
+                        unit1 = ' ft';
+                        unit2 = ' mi';
+                    } else {
+                        unitConversion = 1000;
+                        unit1 = ' km';
+                        unit2 = ' m';
+                    }
+                    if (distance > unitConversion * 10) {
+                        label = Math.round(distance / unitConversion) + unit2;
+                    } else if (distance > 1000) {
+                        label = (Math.round(distance / (unitConversion / 10)) / 10) + unit2;
+                    } else {
+                        label = Math.round(distance) + unit1;
+                    }
                 }
 
                 this._destroyPoint();  // Just in case it still exists.
@@ -446,13 +472,19 @@ class GoogleLinkEnhancer {
                     strokeOpacity: 0.5
                 });
                 this._lineFeature = new OL.Feature.Vector(lsLine, {}, {
-                                                          strokeWidth: 3,
-                                                          strokeDashstyle: '12 8',
-                                                          strokeColor: '#FF0',
-                                                          });
+                    strokeWidth: 3,
+                    strokeDashstyle: '12 8',
+                    strokeColor: '#FF0',
+                    label: label,
+                    labelYOffset: 45,
+                    fontColor: '#FF0',
+                    fontWeight: 'bold',
+                    labelOutlineColor: "#000",
+                    labelOutlineWidth: 4,
+                    fontSize: '18'
+                });
                 W.map.getLayerByUniqueName('landmarks').addFeatures([this._ptFeature, this._lineFeature]);
                 this._timeoutDestroyPoint();
-                
             }
         } else {
             $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
