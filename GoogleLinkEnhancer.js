@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.25.001
+// @version      2018.03.25.002
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -37,9 +37,18 @@ class GoogleLinkEnhancer {
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
         this._initLZString();
-
+        
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
-        this._linkCache = storedCache ? $.parseJSON(this._LZString.decompress(storedCache)) : {};
+        try {
+            this._linkCache = storedCache ? $.parseJSON(this._LZString.decompress(storedCache)) : {};
+        } catch (ex) {
+            if (ex.hasOwnProperty(name) && ex.name === 'SyntaxError') {
+                // In case the cache is corrupted and can't be read.  Seems to happen occasionally, at least in FireFox.
+                this._linkCache = {};
+            } else {
+                throw ex;
+            }
+        }
         if (this._linkCache === null) this._linkCache = {};
 
         this._initLayer();
