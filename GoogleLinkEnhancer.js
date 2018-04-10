@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.03.25.003
+// @version      2018.04.10.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -288,6 +288,12 @@ class GoogleLinkEnhancer {
         // If the point isn't destroyed yet, destroy it when mousing over the map.
         event.data._destroyPoint();
     }
+    
+    _getSelectedFeatures = function(){
+        if(!W.selectionManager.getSelectedFeatures)
+            return W.selectionManager.selectedItems;
+        return W.selectionManager.getSelectedFeatures();
+    }
 
     _formatLinkElements(a,b,c) {
         let existingLinks = this._getExistingLinks();
@@ -313,7 +319,7 @@ class GoogleLinkEnhancer {
                         $childEl.find('div.uuid').css({backgroundColor:'#F0F'}).attr('title',this.strings.badLink);
                     }, 50);
                 } else {
-                    let venue = W.selectionManager.selectedItems[0].model;
+                    let venue = this._getSelectedFeatures()[0].model;
                     if (this._isLinkTooFar(link, venue)) {
                         setTimeout(() => {
                             $childEl.find('div.uuid').css({backgroundColor:'#0FF'}).attr('title',this.strings.tooFar.replace('{0}',this.distanceLimit));
@@ -327,8 +333,8 @@ class GoogleLinkEnhancer {
     _getExistingLinks() {
         let existingLinks = {};
         let thisVenue;
-        if (W.selectionManager.selectedItems.length) {
-            thisVenue = W.selectionManager.selectedItems[0].model;
+        if (this._getSelectedFeatures().length) {
+            thisVenue = this._getSelectedFeatures()[0].model;
         }
         W.model.venues.getObjectArray().forEach(venue => {
             let isThisVenue = venue === thisVenue;
@@ -433,7 +439,7 @@ class GoogleLinkEnhancer {
                 let coord = link.loc;
                 let poiPt = new OL.Geometry.Point(coord.lng, coord.lat);
                 poiPt.transform(W.map.displayProjection, W.map.projection);
-                let placeGeom = W.selectionManager.selectedItems[0].geometry.getCentroid();
+                let placeGeom = this._getSelectedFeatures()[0].geometry.getCentroid();
                 let placePt = new OL.Geometry.Point(placeGeom.x, placeGeom.y);
                 let ext = W.map.getExtent();
                 var lsBounds = new OL.Geometry.LineString([new OL.Geometry.Point(ext.left, ext.bottom), new OL.Geometry.Point(ext.left, ext.top),
