@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.04.10.002
+// @version      2018.04.11.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -37,19 +37,20 @@ class GoogleLinkEnhancer {
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
         this._initLZString();
-        
+
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
         try {
-            this._linkCache = storedCache ? $.parseJSON(this._LZString.decompress(storedCache)) : {};
+            this._linkCache = storedCache ? $.parseJSON(this._LZString.decompressFromUTF16(storedCache)) : {};
         } catch (ex) {
-            if (ex.hasOwnProperty(name) && ex.name === 'SyntaxError') {
-                // In case the cache is corrupted and can't be read.  Seems to happen occasionally, at least in FireFox.
+            if (ex.name === 'SyntaxError') {
+                // In case the cache is corrupted and can't be read.
                 this._linkCache = {};
+                console.warn('GoogleLinkEnhancer:', 'An error occurred while loading the stored cache.  A new cache was created.');
             } else {
                 throw ex;
             }
         }
-        if (this._linkCache === null) this._linkCache = {};
+        if (this._linkCache === null || this._linkCache.length === 0) this._linkCache = {};
 
         this._initLayer();
 
@@ -184,7 +185,7 @@ class GoogleLinkEnhancer {
                 delete this._linkCache[id];
             }
         });
-        localStorage.setItem(this.LINK_CACHE_NAME, this._LZString.compress(JSON.stringify(this._linkCache)));
+        localStorage.setItem(this.LINK_CACHE_NAME, this._LZString.compressToUTF16(JSON.stringify(this._linkCache)));
         //console.log('link cache count: ' + Object.keys(this._linkCache).length, this._linkCache);
     }
 
@@ -288,7 +289,7 @@ class GoogleLinkEnhancer {
         // If the point isn't destroyed yet, destroy it when mousing over the map.
         event.data._destroyPoint();
     }
-    
+
     _getSelectedFeatures(){
         if(!W.selectionManager.getSelectedFeatures)
             return W.selectionManager.selectedItems;
