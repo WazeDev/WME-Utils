@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            WME Utils - HoursParser
 // @namespace       WazeDev
-// @version         2018.01.15.005
+// @version         2018.07.04.001
 // @description     Parses a text string into hours, for use in Waze Map Editor scripts
 // @author          MapOMatic (originally developed by bmtg)
 // @license         GNU GPLv3
@@ -50,26 +50,30 @@ class HoursParser {
         if (inputHoursParse.length === 0 || inputHoursParse === ',') {
             return returnVal;
         }
-        let today = new Date();
-        let tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        inputHoursParse = inputHoursParse.replace(/\btoday\b/g, today.toLocaleDateString(locale, {weekday:'short'}).toLowerCase())
-            .replace(/\btomorrow\b/g, tomorrow.toLocaleDateString(locale, {weekday:'short'}).toLowerCase())
-            .replace(/\u2013|\u2014/g, "-")  // long dash replacing
-            .replace(/[^a-z0-9\:\-\. ~]/g, ' ')  // replace unnecessary characters with spaces
-            .replace(/\:{2,}/g, ':')  // remove extra colons
-            .replace(/closed|not open/g, '99:99-99:99')  // parse 'closed'
-            .replace(/by appointment( only)?/g, '99:99-99:99')  // parse 'appointment only'
-            .replace(/weekdays/g, 'mon-fri').replace(/weekends/g, 'sat-sun')  // convert weekdays and weekends to days
-            .replace(/(12(:00)?\W*)?noon/g, "12:00").replace(/(12(:00)?\W*)?mid(night|nite)/g, "00:00")  // replace 'noon', 'midnight'
-            .replace(/every\s*day|daily|(7|seven) days a week/g, "mon-sun")  // replace 'seven days a week'
-            .replace(/(open\s*)?(24|twenty\W*four)\W*h(ou)?rs?|all day/g, "00:00-00:00")  // replace 'open 24 hour or similar'
-            .replace(/(\D:)([^ ])/g, "$1 $2");  // space after colons after words
+        if (/24\s*[\\/*x]\s*7/g.test(inputHoursParse)) {
+            inputHoursParse = 'mon-sun 00:00-00:00';
+        } else {
+            let today = new Date();
+            let tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            inputHoursParse = inputHoursParse.replace(/\btoday\b/g, today.toLocaleDateString(locale, {weekday:'short'}).toLowerCase())
+                .replace(/\btomorrow\b/g, tomorrow.toLocaleDateString(locale, {weekday:'short'}).toLowerCase())
+                .replace(/\u2013|\u2014/g, "-")  // long dash replacing
+                .replace(/[^a-z0-9\:\-\. ~]/g, ' ')  // replace unnecessary characters with spaces
+                .replace(/\:{2,}/g, ':')  // remove extra colons
+                .replace(/closed|not open/g, '99:99-99:99')  // parse 'closed'
+                .replace(/by appointment( only)?/g, '99:99-99:99')  // parse 'appointment only'
+                .replace(/weekdays/g, 'mon-fri').replace(/weekends/g, 'sat-sun')  // convert weekdays and weekends to days
+                .replace(/(12(:00)?\W*)?noon/g, "12:00").replace(/(12(:00)?\W*)?mid(night|nite)/g, "00:00")  // replace 'noon', 'midnight'
+                .replace(/every\s*day|daily|(7|seven) days a week/g, "mon-sun")  // replace 'seven days a week'
+                .replace(/(open\s*)?(24|twenty\W*four)\W*h(ou)?rs?|all day/g, "00:00-00:00")  // replace 'open 24 hour or similar'
+                .replace(/(\D:)([^ ])/g, "$1 $2");  // space after colons after words
 
-        // replace thru type words with dashes
-        this.THRU_WORDS.forEach(word => {
-            inputHoursParse = inputHoursParse.replace( new RegExp(word, 'g'), '-');
-        });
+            // replace thru type words with dashes
+            this.THRU_WORDS.forEach(word => {
+                inputHoursParse = inputHoursParse.replace( new RegExp(word, 'g'), '-');
+            });
+        }
 
         inputHoursParse = inputHoursParse.replace(/\-{2,}/g, "-");  // replace any duplicate dashes
 
@@ -429,6 +433,4 @@ class HoursParser {
         return toSort;
     }
     
-    // delete this later...
-    _unused() {}
 }
