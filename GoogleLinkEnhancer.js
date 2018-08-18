@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.04.11.001
+// @version      2018.08.18.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -254,7 +254,7 @@ class GoogleLinkEnhancer {
                 });
             }
         } catch (ex) {
-            console.log(ex);
+            console.error('PIE (Google Link Enhancer) error:', ex);
         }
     }
 
@@ -273,6 +273,7 @@ class GoogleLinkEnhancer {
                 $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
                     if (json.status==='NOT_FOUND')  {
                         link = {notFound: true};
+                        console.debug('GLE (link not found for ' + id + '):', json);
                     } else {
                         link = {loc:json.result.geometry.location,closed:json.result.permanently_closed};
                     }
@@ -416,6 +417,9 @@ class GoogleLinkEnhancer {
                 link.closed = data.result.permanently_closed;
             }
             var id = url.match(/placeid=(.*)&?/)[0];
+            if (link.notFound) {
+                console.debug('GLE (link not found for ' + id + '):', data);
+            }
             that._cacheLink(id, link);
             that._formatLinkElements();
         }
