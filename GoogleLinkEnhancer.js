@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2018.08.18.001
+// @version      2019.01.16.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -14,6 +14,8 @@
 /* global W */
 /* global Node */
 
+/* eslint-disable */
+
 class GoogleLinkEnhancer {
 
     constructor() {
@@ -25,7 +27,7 @@ class GoogleLinkEnhancer {
         this._mapLayer = null;
         this._urlOrigin = window.location.origin;
         this._distanceLimit = 400;                // Default distance (meters) when Waze place is flagged for being too far from Google place.
-                                                  // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
+        // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
 
         this.strings = {};
         this.strings.closedPlace = 'Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.';
@@ -57,7 +59,7 @@ class GoogleLinkEnhancer {
         // Watch for ext provider elements being added to the DOM, and add hover events.
         this._linkObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
-                for (let idx=0; idx<mutation.addedNodes.length; idx++) {
+                for (let idx = 0; idx < mutation.addedNodes.length; idx++) {
                     let nd = mutation.addedNodes[idx];
                     if (nd.nodeType === Node.ELEMENT_NODE) {
                         let $el = $(nd);
@@ -76,7 +78,7 @@ class GoogleLinkEnhancer {
         // Watch the side panel for addition of the sidebar-layout div, which indicates a mode change.
         this._modeObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
-                for (let idx = 0; idx<mutation.addedNodes.length; idx++) {
+                for (let idx = 0; idx < mutation.addedNodes.length; idx++) {
                     let nd = mutation.addedNodes[idx];
                     if (nd.nodeType === Node.ELEMENT_NODE && $(nd).is('.sidebar-layout')) {
                         this._observeLinks();
@@ -87,9 +89,9 @@ class GoogleLinkEnhancer {
         });
 
         // This is a special event that will be triggered when DOM elements are destroyed.
-        (function($){
+        (function ($) {
             $.event.special.destroyed = {
-                remove: function(o) {
+                remove: function (o) {
                     if (o.handler && o.type !== 'destroyed') {
                         o.handler();
                     }
@@ -99,7 +101,7 @@ class GoogleLinkEnhancer {
     }
 
 
-    _initLayer(){
+    _initLayer() {
         this._mapLayer = new OL.Layer.Vector('Google Link Enhancements.', {
             uniqueName: '___GoogleLinkEnhancements',
             displayInLayerSwitcher: true,
@@ -118,20 +120,20 @@ class GoogleLinkEnhancer {
 
         W.map.addLayer(this._mapLayer);
 
-        W.model.events.register('mergeend',this,function(e){
+        W.model.events.register('mergeend', this, function (e) {
             this._processPlaces();
-        },true);
-        W.map.events.register('moveend',this,function(e){
+        }, true);
+        W.map.events.register('moveend', this, function (e) {
             this._processPlaces();
-        },true);
-        W.model.venues.on('objectschanged', function(e) {
+        }, true);
+        W.model.venues.on('objectschanged', function (e) {
             this._processPlaces();
         }, this);
     }
 
     enable() {
         this._enabled = true;
-        this._modeObserver.observe($('.edit-area #sidebarContent')[0], {childList: true, subtree:false});
+        this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
         this._observeLinks();
         // Note: Using on() allows passing "this" as a variable, so it can be used in the handler function.
         $(document).on('ajaxSuccess', null, this, this._onAjaxSuccess);
@@ -205,7 +207,7 @@ class GoogleLinkEnhancer {
             } else {
                 let bounds = venue.geometry.getBounds();
                 let center = bounds.getCenterLonLat();
-                venuePt = {x: center.lon, y: center.lat};
+                venuePt = { x: center.lon, y: center.lat };
                 distanceLimit = this._distanceBetweenPoints(center.lon, center.lat, bounds.right, bounds.top) + this.distanceLimit;
             }
             let distance = this._distanceBetweenPoints(linkPt.x, linkPt.y, venuePt.x, venuePt.y);
@@ -223,8 +225,11 @@ class GoogleLinkEnhancer {
                 let projFrom = W.map.displayProjection;
                 let projTo = W.map.projection;
                 let mapExtent = W.map.getExtent();
+                // Get a list of already-linked id's
+                let existingLinks = this._getExistingLinks();
                 this._mapLayer.removeAllFeatures();
-                W.model.venues.getObjectArray().forEach(function(venue) {
+                let drawnLinks = [];
+                W.model.venues.getObjectArray().forEach(function (venue) {
                     let isTooFar = false;
                     venue.attributes.externalProviderIDs.forEach(provID => {
                         let id = provID.attributes.uuid;
@@ -236,7 +241,9 @@ class GoogleLinkEnhancer {
                                 let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
                                 let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
                                 let width = venue.isPoint() ? '4' : '12';
-                                that._mapLayer.addFeatures([new OL.Feature.Vector(geometry, {strokeWidth:width, strokeColor:'#0FF', strokeDashstyle:dashStyle})]);
+                                that._mapLayer.addFeatures([
+                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: '#0FF', strokeDashstyle: dashStyle })
+                                ]);
                             }
 
                             // Check for closed places or invalid Google links.
@@ -245,7 +252,37 @@ class GoogleLinkEnhancer {
                                 let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
                                 let width = venue.isPoint() ? '4' : '12';
                                 let color = link.notFound ? '#F0F' : '#F00';
-                                that._mapLayer.addFeatures([new OL.Feature.Vector(geometry, {strokeWidth:width, strokeColor:color, strokeDashstyle:dashStyle})]);
+                                that._mapLayer.addFeatures([
+                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: color, strokeDashstyle: dashStyle })
+                                ]);
+                            }
+
+                            // Check for duplicate links
+                            let linkInfo = existingLinks[id];
+                            if (linkInfo.count > 1) {
+                                let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                                let width = venue.isPoint() ? '4' : '12';
+                                let color = '#fb8d00';
+                                let features = [new OL.Feature.Vector(geometry, {
+                                    strokeWidth: width, strokeColor: color
+                                })];
+                                let lineStart = geometry.getCentroid();
+                                linkInfo.venues.forEach(linkVenue => {
+                                    if (linkVenue !== venue
+                                        && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
+                                        features.push(
+                                            new OL.Feature.Vector(
+                                                new OL.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
+                                                {
+                                                    strokeWidth: 4,
+                                                    strokeColor: color,
+                                                    strokeDashstyle: '12 12',
+                                                })
+                                        )
+                                        drawnLinks.push([venue, linkVenue]);
+                                    }
+                                })
+                                that._mapLayer.addFeatures(features);
                             }
                         }).catch(res => {
                             console.log(res);
@@ -271,11 +308,11 @@ class GoogleLinkEnhancer {
         } else {
             return new Promise((resolve, reject) => {
                 $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
-                    if (json.status==='NOT_FOUND')  {
-                        link = {notFound: true};
+                    if (json.status === 'NOT_FOUND') {
+                        link = { notFound: true };
                         console.debug('GLE (link not found for ' + id + '):', json);
                     } else {
-                        link = {loc:json.result.geometry.location,closed:json.result.permanently_closed};
+                        link = { loc: json.result.geometry.location, closed: json.result.permanently_closed };
                     }
                     this._cacheLink(id, link);
                     resolve(link);
@@ -291,20 +328,20 @@ class GoogleLinkEnhancer {
         event.data._destroyPoint();
     }
 
-    _getSelectedFeatures(){
-        if(!W.selectionManager.getSelectedFeatures)
+    _getSelectedFeatures() {
+        if (!W.selectionManager.getSelectedFeatures)
             return W.selectionManager.selectedItems;
         return W.selectionManager.getSelectedFeatures();
     }
 
-    _formatLinkElements(a,b,c) {
+    _formatLinkElements(a, b, c) {
         let existingLinks = this._getExistingLinks();
         $('#edit-panel').find(this.EXT_PROV_ELEM_QUERY).each((ix, childEl) => {
             let $childEl = $(childEl);
             let id = this._getIdFromElement($childEl);
             if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
                 setTimeout(() => {
-                    $childEl.find('div.uuid').css({backgroundColor:'#FFA500'}).attr({'title':this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count)});
+                    $childEl.find('div.uuid').css({ backgroundColor: '#FFA500' }).attr({ 'title': this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count) });
                 }, 50);
             }
             this._addHoverEvent($(childEl));
@@ -314,17 +351,17 @@ class GoogleLinkEnhancer {
                 if (link.closed) {
                     // A delay is needed to allow the UI to do its formatting so it doesn't overwrite ours.
                     setTimeout(() => {
-                        $childEl.find('div.uuid').css({backgroundColor:'#FAA'}).attr('title',this.strings.closedPlace);
+                        $childEl.find('div.uuid').css({ backgroundColor: '#FAA' }).attr('title', this.strings.closedPlace);
                     }, 50);
                 } else if (link.notFound) {
                     setTimeout(() => {
-                        $childEl.find('div.uuid').css({backgroundColor:'#F0F'}).attr('title',this.strings.badLink);
+                        $childEl.find('div.uuid').css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
                     }, 50);
                 } else {
                     let venue = this._getSelectedFeatures()[0].model;
                     if (this._isLinkTooFar(link, venue)) {
                         setTimeout(() => {
-                            $childEl.find('div.uuid').css({backgroundColor:'#0FF'}).attr('title',this.strings.tooFar.replace('{0}',this.distanceLimit));
+                            $childEl.find('div.uuid').css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
                         }, 50);
                     }
                 }
@@ -348,8 +385,9 @@ class GoogleLinkEnhancer {
                     let link = existingLinks[id];
                     if (link) {
                         link.count++;
+                        link.venues.push(venue);
                     } else {
-                        link = {count: 1};
+                        link = { count: 1, venues: [venue] };
                         existingLinks[id] = link;
                     }
                     link.isThisVenue = link.isThisVenue || isThisVenue;
@@ -363,7 +401,7 @@ class GoogleLinkEnhancer {
         let url = ajaxOptions.url;
         let that = event.data;
 
-        if(/^\/maps\/api\/place\/autocomplete\/json?/i.test(url)) {
+        if (/^\/maps\/api\/place\/autocomplete\/json?/i.test(url)) {
             // After an "autocomplete" api call...
 
             // Get a list of already-linked id's
@@ -392,12 +430,12 @@ class GoogleLinkEnhancer {
                                 textColor = '#888';
                             }
                         }
-                        if (bgColor) $el.css({backgroundColor: bgColor});
-                        if (textColor) $el.css({color: textColor});
-                        if (fontWeight) $el.css({fontWeight: fontWeight});
-                        $el.attr('title',title);
+                        if (bgColor) $el.css({ backgroundColor: bgColor });
+                        if (textColor) $el.css({ color: textColor });
+                        if (fontWeight) $el.css({ fontWeight: fontWeight });
+                        $el.attr('title', title);
                     }
-                    $el.mouseover(function() {
+                    $el.mouseover(function () {
                         that._addPoint(linkData.id);
                     }).mouseleave(() => that._destroyPoint()).bind('destroyed', () => that._destroyPoint()).mousedown(() => that._destroyPoint());
                 }
@@ -447,8 +485,12 @@ class GoogleLinkEnhancer {
                 let placeGeom = this._getSelectedFeatures()[0].geometry.getCentroid();
                 let placePt = new OL.Geometry.Point(placeGeom.x, placeGeom.y);
                 let ext = W.map.getExtent();
-                var lsBounds = new OL.Geometry.LineString([new OL.Geometry.Point(ext.left, ext.bottom), new OL.Geometry.Point(ext.left, ext.top),
-                                                         new OL.Geometry.Point(ext.right, ext.top),new OL.Geometry.Point(ext.right, ext.bottom),new OL.Geometry.Point(ext.left, ext.bottom)]);
+                var lsBounds = new OL.Geometry.LineString([
+                    new OL.Geometry.Point(ext.left, ext.bottom),
+                    new OL.Geometry.Point(ext.left, ext.top),
+                    new OL.Geometry.Point(ext.right, ext.top),
+                    new OL.Geometry.Point(ext.right, ext.bottom),
+                    new OL.Geometry.Point(ext.left, ext.bottom)]);
                 let lsLine = new OL.Geometry.LineString([placePt, poiPt]);
 
                 // If the line extends outside the bounds, split it so we don't draw a line across the world.
@@ -484,7 +526,7 @@ class GoogleLinkEnhancer {
                 }
 
                 this._destroyPoint();  // Just in case it still exists.
-                this._ptFeature = new OL.Feature.Vector(poiPt,{poiCoord:true},{
+                this._ptFeature = new OL.Feature.Vector(poiPt, { poiCoord: true }, {
                     pointRadius: 6,
                     strokeWidth: 30,
                     strokeColor: '#FF0',
@@ -508,7 +550,7 @@ class GoogleLinkEnhancer {
             }
         } else {
             $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
-                this._cacheLink(id, {loc:json.result.geometry.location,closed:json.result.permanently_closed});
+                this._cacheLink(id, { loc: json.result.geometry.location, closed: json.result.permanently_closed });
                 this._addPoint(id);
             });
         }
@@ -525,11 +567,11 @@ class GoogleLinkEnhancer {
     }
 
     _addHoverEvent($el) {
-        $el.hover(() => this._addPoint(this._getIdFromElement($el)) , () => this._destroyPoint());
+        $el.hover(() => this._addPoint(this._getIdFromElement($el)), () => this._destroyPoint());
     }
 
     _observeLinks() {
-        this._linkObserver.observe($('#edit-panel')[0],{ childList: true, subtree: true });
+        this._linkObserver.observe($('#edit-panel')[0], { childList: true, subtree: true });
     }
 
     _initLZString() {
@@ -538,7 +580,7 @@ class GoogleLinkEnhancer {
         // This work is free. You can redistribute it and/or modify it
         // under the terms of the WTFPL, Version 2
         // LZ-based compression algorithm, version 1.4.4
-        this._LZString = (function() {
+        this._LZString = (function () {
             // private property
             var f = String.fromCharCode;
             var keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -555,9 +597,9 @@ class GoogleLinkEnhancer {
                 return baseReverseDic[alphabet][character];
             }
             var LZString = {
-                compressToBase64: function(input) {
+                compressToBase64: function (input) {
                     if (input === null) return "";
-                    var res = LZString._compress(input, 6, function(a) {
+                    var res = LZString._compress(input, 6, function (a) {
                         return keyStrBase64.charAt(a);
                     });
                     switch (res.length % 4) { // To produce valid Base64
@@ -572,33 +614,33 @@ class GoogleLinkEnhancer {
                             return res + "=";
                     }
                 },
-                decompressFromBase64: function(input) {
+                decompressFromBase64: function (input) {
                     if (input === null) return "";
                     if (input === "") return null;
-                    return LZString._decompress(input.length, 32, function(index) {
+                    return LZString._decompress(input.length, 32, function (index) {
                         return getBaseValue(keyStrBase64, input.charAt(index));
                     });
                 },
-                compressToUTF16: function(input) {
+                compressToUTF16: function (input) {
                     if (input === null) return "";
-                    return LZString._compress(input, 15, function(a) {
+                    return LZString._compress(input, 15, function (a) {
                         return f(a + 32);
                     }) + " ";
                 },
-                decompressFromUTF16: function(compressed) {
+                decompressFromUTF16: function (compressed) {
                     if (compressed === null) return "";
                     if (compressed === "") return null;
-                    return LZString._decompress(compressed.length, 16384, function(index) {
+                    return LZString._decompress(compressed.length, 16384, function (index) {
                         return compressed.charCodeAt(index) - 32;
                     });
                 },
 
-                compress: function(uncompressed) {
-                    return LZString._compress(uncompressed, 16, function(a) {
+                compress: function (uncompressed) {
+                    return LZString._compress(uncompressed, 16, function (a) {
                         return f(a);
                     });
                 },
-                _compress: function(uncompressed, bitsPerChar, getCharFromInt) {
+                _compress: function (uncompressed, bitsPerChar, getCharFromInt) {
                     if (uncompressed === null) return "";
                     var i, value,
                         context_dictionary = {},
@@ -804,14 +846,14 @@ class GoogleLinkEnhancer {
                     }
                     return context_data.join('');
                 },
-                decompress: function(compressed) {
+                decompress: function (compressed) {
                     if (compressed === null) return "";
                     if (compressed === "") return null;
-                    return LZString._decompress(compressed.length, 32768, function(index) {
+                    return LZString._decompress(compressed.length, 32768, function (index) {
                         return compressed.charCodeAt(index);
                     });
                 },
-                _decompress: function(length, resetValue, getNextValue) {
+                _decompress: function (length, resetValue, getNextValue) {
                     var dictionary = [],
                         next,
                         enlargeIn = 4,
