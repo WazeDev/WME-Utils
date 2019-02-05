@@ -1,12 +1,15 @@
 // ==UserScript==
 // @name            WME Utils - HoursParser
 // @namespace       WazeDev
-// @version         2018.08.17.001
+// @version         2019.02.05.001
 // @description     Parses a text string into hours, for use in Waze Map Editor scripts
 // @author          MapOMatic (originally developed by bmtg)
 // @license         GNU GPLv3
 // ==/UserScript==
 
+/* global require */
+
+// eslint-disable-next-line no-unused-vars
 class HoursParser {
     constructor() {
         this.DAYS_OF_THE_WEEK = {
@@ -33,7 +36,9 @@ class HoursParser {
             DEC: ['december', 'dec']
         };
         this.DAY_CODE_VECTOR = ['MM','TT','WW','RR','FF','SS','UU','MM','TT','WW','RR','FF','SS','UU','MM','TT','WW','RR','FF'];
-        this.THRU_WORDS = ['through','thru','to','until','till','til','-','~'];
+        this.THRU_WORDS = ['through', 'thru', 'to', 'until', 'till', 'til', '-', '~'];
+        // eslint-disable-next-line global-require
+        this.OpeningHours = require('Waze/Model/Objects/OpeningHour');
     }
 
     parseHours(inputHours, locale) {
@@ -284,7 +289,12 @@ class HoursParser {
             }
         }
 
-        var hoursObjectArray = [], hoursObjectArrayMinDay = [], hoursObjectArraySorted = [], hoursObjectAdd, daysObjArray, toFromSplit;
+        const hoursObjectArray = [];
+        const hoursObjectArrayMinDay = [];
+        const hoursObjectArraySorted = [];
+        let hoursObjectAdd;
+        let daysObjArray;
+        let toFromSplit;
         for (tsix=0; tsix<newDaysVec.length; tsix++) {
             hoursObjectAdd = {};
             daysObjArray = [];
@@ -340,7 +350,7 @@ class HoursParser {
             hoursObjectAdd.fromHour = toFromSplit[1];
             hoursObjectAdd.toHour = toFromSplit[2];
             hoursObjectAdd.days = daysObjArray.sort();
-            hoursObjectArray.push(hoursObjectAdd);
+            hoursObjectArray.push(new this.OpeningHours(hoursObjectAdd));
             // track the order
             if (hoursObjectAdd.days.length > 1 && hoursObjectAdd.days[0] === 0) {
                 hoursObjectArrayMinDay.push( hoursObjectAdd.days[1] * 100 + parseInt(toFromSplit[1][0])*10 + parseInt(toFromSplit[1][1]) );
