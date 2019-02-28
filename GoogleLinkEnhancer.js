@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2019.01.16.001
+// @version      2019.02.27.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -75,6 +75,26 @@ class GoogleLinkEnhancer {
             });
         });
 
+        // Watch for Google place search result list items being added to the DOM
+        let that = this;
+        this._searchResultsObserver = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                for (let idx = 0; idx < mutation.addedNodes.length; idx++) {
+                    let nd = mutation.addedNodes[idx];
+                    if (nd.nodeType === Node.ELEMENT_NODE && $(nd).is('.select2-results-dept-0') && $(nd).parent().parent().is('.select2-with-searchbox')) {
+                        $(nd).mouseenter(() => {
+                            // When mousing over a list item, find the Google place ID from the list that was stored previously.
+                            // Then add the point/line to the map.
+                            that._addPoint(that._lastSearchResultPlaceIds[idx]);
+                        }).mouseleave(() => {
+                            // When leaving the list item, remove the point.
+                            that._destroyPoint()
+                        });
+                    }
+                }
+            });
+        });
+
         // Watch the side panel for addition of the sidebar-layout div, which indicates a mode change.
         this._modeObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
@@ -132,30 +152,38 @@ class GoogleLinkEnhancer {
     }
 
     enable() {
-        this._enabled = true;
-        this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
-        this._observeLinks();
-        // Note: Using on() allows passing "this" as a variable, so it can be used in the handler function.
-        $(document).on('ajaxSuccess', null, this, this._onAjaxSuccess);
-        $('#map').on('mouseenter', null, this, this._onMapMouseenter);
-        $(window).on('unload', null, this, this._onWindowUnload);
-        W.model.venues.on('objectschanged', this._formatLinkElements, this);
-        this._processPlaces();
-        this._cleanAndSaveLinkCache();
-        this._cacheCleanIntervalID = setInterval(() => this._cleanAndSaveLinkCache(), 1000 * 60 * this.LINK_CACHE_CLEAN_INTERVAL_MIN);
+        if (!this._enabled) {
+            this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
+            this._observeLinks();
+            this._searchResultsObserver.observe($('body')[0], { childList: true, subtree: true });
+            // Watch for JSONP callbacks. JSONP is used for the autocomplete results when searching for Google links.
+            this._addJsonpInterceptor();
+            // Note: Using on() allows passing "this" as a variable, so it can be used in the handler function.
+            $(document).on('ajaxSuccess', null, this, this._onAjaxSuccess);
+            $('#map').on('mouseenter', null, this, this._onMapMouseenter);
+            $(window).on('unload', null, this, this._onWindowUnload);
+            W.model.venues.on('objectschanged', this._formatLinkElements, this);
+            this._processPlaces();
+            this._cleanAndSaveLinkCache();
+            this._cacheCleanIntervalID = setInterval(() => this._cleanAndSaveLinkCache(), 1000 * 60 * this.LINK_CACHE_CLEAN_INTERVAL_MIN);
+            this._enabled = true;
+        }
     }
 
     disable() {
-        this._enabled = false;
-        this._modeObserver.disconnect();
-        this._linkObserver.disconnect();
-        $(document).off('ajaxSuccess', this._onAjaxSuccess);
-        $('#map').off('mouseenter', this._onMapMouseenter);
-        $(window).off('unload', null, this, this._onWindowUnload);
-        W.model.venues.off('objectschanged', this._formatLinkElements, this);
-        if (this._cacheCleanIntervalID) clearInterval(this._cacheCleanIntervalID);
-        this._cleanAndSaveLinkCache();
-        this._mapLayer.removeAllFeatures();
+        if (this._enabled) {
+            this._modeObserver.disconnect();
+            this._linkObserver.disconnect();
+            this._searchResultsObserver.disconnect();
+            this._removeJsonpInterceptor();
+            $(document).off('ajaxSuccess', this._onAjaxSuccess);
+            $('#map').off('mouseenter', this._onMapMouseenter);
+            $(window).off('unload', null, this, this._onWindowUnload);
+            W.model.venues.off('objectschanged', this._formatLinkElements, this);
+            if (this._cacheCleanIntervalID) clearInterval(this._cacheCleanIntervalID);
+            this._cleanAndSaveLinkCache();
+            this._enabled = false;
+        }
     }
 
     // The distance (in meters) before flagging a Waze place that is too far from the linked Google place.
@@ -337,6 +365,7 @@ class GoogleLinkEnhancer {
     _formatLinkElements(a, b, c) {
         let existingLinks = this._getExistingLinks();
         $('#edit-panel').find(this.EXT_PROV_ELEM_QUERY).each((ix, childEl) => {
+            console.log(childEl);
             let $childEl = $(childEl);
             let id = this._getIdFromElement($childEl);
             if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
@@ -572,6 +601,72 @@ class GoogleLinkEnhancer {
 
     _observeLinks() {
         this._linkObserver.observe($('#edit-panel')[0], { childList: true, subtree: true });
+    }
+
+    // The JSONP interceptor is used to watch the head element for the addition of JSONP functions
+    // that process Google link search results. Those functions are overridden by our own so we can
+    // process the results before sending them on to the original function.
+    _addJsonpInterceptor() {
+        // The idea for this function was hatched here:
+        // https://stackoverflow.com/questions/6803521/can-google-maps-places-autocomplete-api-be-used-via-ajax/9856786
+
+        // The head element, where the Google Autocomplete code will insert a tag 
+        // for a javascript file.
+        var head = $('head')[0];
+        // The name of the method the Autocomplete code uses to insert the tag.
+        var method = 'appendChild';
+        // The method we will be overriding.
+        var originalMethod = head[method];
+        this._originalHeadAppendChildMethod = originalMethod;
+        let that = this;
+        head[method] = function () {
+            // Check that the element is a javascript tag being inserted by Google.
+            if (arguments[0] && arguments[0].src && arguments[0].src.match(/GetPredictions/)) {
+                // Regex to extract the name of the callback method that the JSONP will call.
+                var callbackMatchObject = (/callback=([^&]+)&|$/).exec(arguments[0].src);
+
+                // Regex to extract the search term that was entered by the user.
+                var searchTermMatchObject = (/\?1s([^&]+)&/).exec(arguments[0].src);
+
+                var searchTerm = unescape(searchTermMatchObject[1]);
+                if (callbackMatchObject && searchTermMatchObject) {
+                    // The JSONP callback method is in the form "abc.def" and each time has a different random name.
+                    var names = callbackMatchObject[1].split('.');
+                    // Store the original callback method.
+                    var originalCallback = names[0] && names[1] && window[names[0]] && window[names[0]][names[1]];
+
+                    if (originalCallback) {
+                        var newCallback = function () {  // Define your own JSONP callback
+                            if (arguments[0] && arguments[0].predictions) {
+                                // SUCCESS!
+
+                                // The autocomplete results
+                                var data = arguments[0];
+
+                                console.log(data);
+                                that._lastSearchResultPlaceIds = data.predictions.map(pred => pred.place_id);
+
+                                // Call the original callback so the WME dropdown can do its thing.
+                                originalCallback(data);
+                            }
+                        }
+
+                        // Add copy all the attributes of the old callback function to the new callback function. 
+                        // This prevents the autocomplete functionality from throwing an error.
+                        for (name in originalCallback) {
+                            newCallback[name] = originalCallback[name];
+                        }
+                        window[names[0]][names[1]] = newCallback;  // Override the JSONP callback
+                    }
+                }
+            }
+            // Insert the element into the dom, regardless of whether it was being inserted by Google.
+            return originalMethod.apply(this, arguments);
+        };
+    }
+
+    _removeJsonpInterceptor() {
+        $('head')[0].appendChild = this._originalHeadAppendChildMethod;
     }
 
     _initLZString() {
