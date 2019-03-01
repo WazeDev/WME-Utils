@@ -13,6 +13,7 @@
 /* global Promise */
 /* global W */
 /* global Node */
+/* global google */
 
 /* eslint-disable */
 
@@ -39,6 +40,12 @@ class GoogleLinkEnhancer {
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
         this._initLZString();
+
+        this._googleMapsApi = {
+            map: document.createElement('div'),
+            service: null
+        };
+        this._googleMapsApi.service = new google.maps.places.PlacesService(this._googleMapsApi.map);
 
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
         try {
@@ -152,6 +159,10 @@ class GoogleLinkEnhancer {
     }
 
     enable() {
+        // THIS SCRIPT IS NOT WORKING BECAUSE OF GOOGLE API USAGE LIMITS.
+        return;
+        // **************************************************************
+
         if (!this._enabled) {
             this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
             this._observeLinks();
@@ -331,22 +342,40 @@ class GoogleLinkEnhancer {
 
     _getLinkInfoAsync(id) {
         var link = this._linkCache[id];
+        debugger;
         if (link) {
             return Promise.resolve(link);
         } else {
             return new Promise((resolve, reject) => {
-                $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
-                    if (json.status === 'NOT_FOUND') {
-                        link = { notFound: true };
-                        console.debug('GLE (link not found for ' + id + '):', json);
+                let request = {
+                    placeId: id,
+                    fields: ['permanently_closed', 'geometry']
+                }
+                this._googleMapsApi.service.getDetails(request, (place, status) => {
+                    if (status == google.maps.places.PlacesServiceStatus.OK) {
+                        link = {
+                            loc: { lng: place.geometry.location.lng(), lat: place.geometry.location.lat() },
+                            closed: place.permanently_closed
+                        }
+                        this._cacheLink(id, link);
+                        resolve(link);
                     } else {
-                        link = { loc: json.result.geometry.location, closed: json.result.permanently_closed };
+                        //TODO: callback with error response
+                        resolve(null);
                     }
-                    this._cacheLink(id, link);
-                    resolve(link);
-                }).fail(res => {
-                    reject(res);
                 });
+                // $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
+                //     if (json.status === 'NOT_FOUND') {
+                //         link = { notFound: true };
+                //         console.debug('GLE (link not found for ' + id + '):', json);
+                //     } else {
+                //         link = { loc: json.result.geometry.location, closed: json.result.permanently_closed };
+                //     }
+                //     this._cacheLink(id, link);
+                //     resolve(link);
+                // }).fail(res => {
+                //     reject(res);
+                // });
             });
         }
     }
@@ -578,10 +607,9 @@ class GoogleLinkEnhancer {
                 this._timeoutDestroyPoint();
             }
         } else {
-            $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
-                this._cacheLink(id, { loc: json.result.geometry.location, closed: json.result.permanently_closed });
+            this._getLinkInfoAsync(id).then(() => {
                 this._addPoint(id);
-            });
+            })
         }
     }
 
