@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2019.03.14.001
+// @version      2019.03.14.002
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -351,7 +351,6 @@ class GoogleLinkEnhancer {
 
     _getLinkInfoAsync(id) {
         var link = this._linkCache[id];
-        debugger;
         if (link) {
             return Promise.resolve(link);
         } else {
