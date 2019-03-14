@@ -150,19 +150,21 @@ class GoogleLinkEnhancer {
         W.model.events.register('mergeend', this, function (e) {
             this._processPlaces();
         }, true);
-        W.map.events.register('moveend', this, function (e) {
-            this._processPlaces();
-        }, true);
+
+        // *************************************
+        // EDIT 2019.03.14 - Not sure if this is needed.  Mergeend event seems to work fine.
+        // Removing it for now, but not thoroughly tested.
+        // *************************************
+        // W.map.events.register('moveend', this, function (e) {
+        //     this._processPlaces();
+        // }, true);
+
         W.model.venues.on('objectschanged', function (e) {
             this._processPlaces();
         }, this);
     }
 
     enable() {
-        // THIS SCRIPT IS NOT WORKING BECAUSE OF GOOGLE API USAGE LIMITS.
-        return;
-        // **************************************************************
-
         if (!this._enabled) {
             this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
             this._observeLinks();
@@ -170,7 +172,6 @@ class GoogleLinkEnhancer {
             // Watch for JSONP callbacks. JSONP is used for the autocomplete results when searching for Google links.
             this._addJsonpInterceptor();
             // Note: Using on() allows passing "this" as a variable, so it can be used in the handler function.
-            $(document).on('ajaxSuccess', null, this, this._onAjaxSuccess);
             $('#map').on('mouseenter', null, this, this._onMapMouseenter);
             $(window).on('unload', null, this, this._onWindowUnload);
             W.model.venues.on('objectschanged', this._formatLinkElements, this);
@@ -187,7 +188,6 @@ class GoogleLinkEnhancer {
             this._linkObserver.disconnect();
             this._searchResultsObserver.disconnect();
             this._removeJsonpInterceptor();
-            $(document).off('ajaxSuccess', this._onAjaxSuccess);
             $('#map').off('mouseenter', this._onMapMouseenter);
             $(window).off('unload', null, this, this._onWindowUnload);
             W.model.venues.off('objectschanged', this._formatLinkElements, this);
@@ -272,60 +272,69 @@ class GoogleLinkEnhancer {
                     let isTooFar = false;
                     venue.attributes.externalProviderIDs.forEach(provID => {
                         let id = provID.attributes.uuid;
-                        that._getLinkInfoAsync(id).then(link => {
-                            // Check for distance from Google POI.
-                            if (that._isLinkTooFar(link, venue) && !isTooFar) {
-                                isTooFar = true;
-                                let venuePt = venue.geometry.getCentroid();
-                                let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
-                                let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
-                                let width = venue.isPoint() ? '4' : '12';
-                                that._mapLayer.addFeatures([
-                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: '#0FF', strokeDashstyle: dashStyle })
-                                ]);
-                            }
 
-                            // Check for closed places or invalid Google links.
-                            if (link.closed || link.notFound) {
-                                let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
-                                let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                                let width = venue.isPoint() ? '4' : '12';
-                                let color = link.notFound ? '#F0F' : '#F00';
-                                that._mapLayer.addFeatures([
-                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: color, strokeDashstyle: dashStyle })
-                                ]);
-                            }
+                        // Check for duplicate links
+                        let linkInfo = existingLinks[id];
+                        if (linkInfo.count > 1) {
+                            let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                            let width = venue.isPoint() ? '4' : '12';
+                            let color = '#fb8d00';
+                            let features = [new OL.Feature.Vector(geometry, {
+                                strokeWidth: width, strokeColor: color
+                            })];
+                            let lineStart = geometry.getCentroid();
+                            linkInfo.venues.forEach(linkVenue => {
+                                if (linkVenue !== venue
+                                    && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
+                                    features.push(
+                                        new OL.Feature.Vector(
+                                            new OL.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
+                                            {
+                                                strokeWidth: 4,
+                                                strokeColor: color,
+                                                strokeDashstyle: '12 12',
+                                            })
+                                    )
+                                    drawnLinks.push([venue, linkVenue]);
+                                }
+                            })
+                            that._mapLayer.addFeatures(features);
+                        }
 
-                            // Check for duplicate links
-                            let linkInfo = existingLinks[id];
-                            if (linkInfo.count > 1) {
-                                let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                                let width = venue.isPoint() ? '4' : '12';
-                                let color = '#fb8d00';
-                                let features = [new OL.Feature.Vector(geometry, {
-                                    strokeWidth: width, strokeColor: color
-                                })];
-                                let lineStart = geometry.getCentroid();
-                                linkInfo.venues.forEach(linkVenue => {
-                                    if (linkVenue !== venue
-                                        && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
-                                        features.push(
-                                            new OL.Feature.Vector(
-                                                new OL.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
-                                                {
-                                                    strokeWidth: 4,
-                                                    strokeColor: color,
-                                                    strokeDashstyle: '12 12',
-                                                })
-                                        )
-                                        drawnLinks.push([venue, linkVenue]);
-                                    }
-                                })
-                                that._mapLayer.addFeatures(features);
-                            }
-                        }).catch(res => {
-                            console.log(res);
-                        });
+
+                        // **************************************************************
+                        // THIS IS NOT CURRENTLY WORKING BECAUSE OF GOOGLE API QUERY LIMITS.
+                        // **************************************************************
+                        // that._getLinkInfoAsync(id).then(link => {
+                        //     if (link instanceof Error) {
+                        //         console.error(link);
+                        //         return;
+                        //     }
+                        //     // Check for distance from Google POI.
+                        //     if (that._isLinkTooFar(link, venue) && !isTooFar) {
+                        //         isTooFar = true;
+                        //         let venuePt = venue.geometry.getCentroid();
+                        //         let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
+                        //         let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
+                        //         let width = venue.isPoint() ? '4' : '12';
+                        //         that._mapLayer.addFeatures([
+                        //             new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: '#0FF', strokeDashstyle: dashStyle })
+                        //         ]);
+                        //     }
+
+                        //     // Check for closed places or invalid Google links.
+                        //     if (link.closed || link.notFound) {
+                        //         let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
+                        //         let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                        //         let width = venue.isPoint() ? '4' : '12';
+                        //         let color = link.notFound ? '#F0F' : '#F00';
+                        //         that._mapLayer.addFeatures([
+                        //             new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: color, strokeDashstyle: dashStyle })
+                        //         ]);
+                        //     }
+                        // }).catch(res => {
+                        //     console.log(res);
+                        // });
                     });
                 });
             }
@@ -350,32 +359,21 @@ class GoogleLinkEnhancer {
                 let request = {
                     placeId: id,
                     fields: ['permanently_closed', 'geometry']
-                }
+                };
                 this._googleMapsApi.service.getDetails(request, (place, status) => {
                     if (status == google.maps.places.PlacesServiceStatus.OK) {
                         link = {
                             loc: { lng: place.geometry.location.lng(), lat: place.geometry.location.lat() },
                             closed: place.permanently_closed
-                        }
+                        };
                         this._cacheLink(id, link);
                         resolve(link);
+                    } else if (status == google.maps.places.PlacesServiceStatus.NOT_FOUND) {
+                        resolve(id, { notFound: true });
                     } else {
-                        //TODO: callback with error response
-                        resolve(null);
+                        resolve(new Error('Google link lookup returned: ' + status));
                     }
                 });
-                // $.getJSON(this._urlOrigin + '/maps/api/place/details/json?&key=AIzaSyDf-q2MCay0AE7RF6oIMrDPrjBwxVtsUuI&placeid=' + id).then(json => {
-                //     if (json.status === 'NOT_FOUND') {
-                //         link = { notFound: true };
-                //         console.debug('GLE (link not found for ' + id + '):', json);
-                //     } else {
-                //         link = { loc: json.result.geometry.location, closed: json.result.permanently_closed };
-                //     }
-                //     this._cacheLink(id, link);
-                //     resolve(link);
-                // }).fail(res => {
-                //     reject(res);
-                // });
             });
         }
     }
@@ -408,19 +406,21 @@ class GoogleLinkEnhancer {
             if (link) {
                 if (link.closed) {
                     // A delay is needed to allow the UI to do its formatting so it doesn't overwrite ours.
-                    setTimeout(() => {
-                        $childEl.find('div.uuid').css({ backgroundColor: '#FAA' }).attr('title', this.strings.closedPlace);
-                    }, 50);
+                    // EDIT 2019.03.14 - Tested without the timeouts and it appears to be working now.
+
+                    //setTimeout(() => {
+                    $childEl.find('div.uuid').css({ backgroundColor: '#FAA' }).attr('title', this.strings.closedPlace);
+                    //}, 50);
                 } else if (link.notFound) {
-                    setTimeout(() => {
-                        $childEl.find('div.uuid').css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
-                    }, 50);
+                    //setTimeout(() => {
+                    $childEl.find('div.uuid').css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
+                    //}, 50);
                 } else {
                     let venue = this._getSelectedFeatures()[0].model;
                     if (this._isLinkTooFar(link, venue)) {
-                        setTimeout(() => {
-                            $childEl.find('div.uuid').css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
-                        }, 50);
+                        //setTimeout(() => {
+                        $childEl.find('div.uuid').css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
+                        //}, 50);
                     }
                 }
             }
@@ -453,72 +453,6 @@ class GoogleLinkEnhancer {
             });
         });
         return existingLinks;
-    }
-
-    _onAjaxSuccess(event, jqXHR, ajaxOptions, data) {
-        let url = ajaxOptions.url;
-        let that = event.data;
-
-        if (/^\/maps\/api\/place\/autocomplete\/json?/i.test(url)) {
-            // After an "autocomplete" api call...
-
-            // Get a list of already-linked id's
-            let existingLinks = that._getExistingLinks();
-
-            // Examine the suggestions and format any that are already linked.
-            $('#select2-drop ul li').each((idx, el) => {
-                let $el = $(el);
-                let linkData = $el.data('select2Data');
-                if (linkData) {
-                    let link = existingLinks[linkData.id];
-                    if (link) {
-                        let title, bgColor, textColor, fontWeight;
-                        if (link.count > 1) {
-                            title = that.strings.multiLinked;
-                            textColor = '#000';
-                            bgColor = '#FFA500';
-                        } else {
-                            bgColor = '#ddd';
-                            if (link.isThisVenue) {
-                                title = that.strings.linkedToThisPlace;
-                                textColor = '#444';
-                                fontWeight = 600;
-                            } else {
-                                title = that.strings.linkedNearby;
-                                textColor = '#888';
-                            }
-                        }
-                        if (bgColor) $el.css({ backgroundColor: bgColor });
-                        if (textColor) $el.css({ color: textColor });
-                        if (fontWeight) $el.css({ fontWeight: fontWeight });
-                        $el.attr('title', title);
-                    }
-                    $el.mouseover(function () {
-                        that._addPoint(linkData.id);
-                    }).mouseleave(() => that._destroyPoint()).bind('destroyed', () => that._destroyPoint()).mousedown(() => that._destroyPoint());
-                }
-            });
-        } else if (/^\/maps\/api\/place\/details\/json?/i.test(url)) {
-            //After a "details" api call...
-
-            // Cache location results.  Note this isn't absolutely necessary because they're
-            // cached when calling for them on mouseover.  However, WME calls this api for each link
-            // when the place is first loaded, so might as well take advantage of it.
-
-            let link = {};
-            if (data.status === 'NOT_FOUND') {
-                link.notFound = true;
-            } else {
-                link.loc = data.result.geometry.location;
-                link.closed = data.result.permanently_closed;
-            }
-            var id = url.match(/placeid=(.*)&?/)[0];
-            if (link.notFound) {
-                console.debug('GLE (link not found for ' + id + '):', data);
-            }
-            that._cacheLink(id, link);
-            that._formatLinkElements();
-        }
     }
 
     // Remove the POI point from the map.
@@ -607,8 +541,12 @@ class GoogleLinkEnhancer {
                 this._timeoutDestroyPoint();
             }
         } else {
-            this._getLinkInfoAsync(id).then(() => {
-                this._addPoint(id);
+            this._getLinkInfoAsync(id).then(res => {
+                if (res instanceof Error) {
+                    console.error(res);
+                } else {
+                    this._addPoint(id);
+                }
             })
         }
     }
