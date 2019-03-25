@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2019.03.14.002
+// @version      2019.03.25.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -13,7 +13,6 @@
 /* global Promise */
 /* global W */
 /* global Node */
-/* global google */
 
 /* eslint-disable */
 
@@ -40,12 +39,6 @@ class GoogleLinkEnhancer {
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
         this._initLZString();
-
-        this._googleMapsApi = {
-            map: document.createElement('div'),
-            service: null
-        };
-        this._googleMapsApi.service = new google.maps.places.PlacesService(this._googleMapsApi.map);
 
         let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
         try {
@@ -159,9 +152,9 @@ class GoogleLinkEnhancer {
         //     this._processPlaces();
         // }, true);
 
-        W.model.venues.on('objectschanged', function (e) {
-            this._processPlaces();
-        }, this);
+        W.model.venues.on('objectschanged', function (e) { this._processPlaces(); }, this);
+        W.model.venues.on('objectsremoved', function (e) { this._processPlaces(); }, this);
+        W.model.venues.on('objectsadded', function (e) { this._processPlaces(); }, this);
     }
 
     enable() {
@@ -301,40 +294,36 @@ class GoogleLinkEnhancer {
                             that._mapLayer.addFeatures(features);
                         }
 
+                        that._getLinkInfoAsync(id).then(link => {
+                            if (link instanceof Error) {
+                                console.error(link);
+                                return;
+                            }
+                            // Check for distance from Google POI.
+                            if (that._isLinkTooFar(link, venue) && !isTooFar) {
+                                isTooFar = true;
+                                let venuePt = venue.geometry.getCentroid();
+                                let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
+                                let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
+                                let width = venue.isPoint() ? '4' : '12';
+                                that._mapLayer.addFeatures([
+                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: '#0FF', strokeDashstyle: dashStyle })
+                                ]);
+                            }
 
-                        // **************************************************************
-                        // THIS IS NOT CURRENTLY WORKING BECAUSE OF GOOGLE API QUERY LIMITS.
-                        // **************************************************************
-                        // that._getLinkInfoAsync(id).then(link => {
-                        //     if (link instanceof Error) {
-                        //         console.error(link);
-                        //         return;
-                        //     }
-                        //     // Check for distance from Google POI.
-                        //     if (that._isLinkTooFar(link, venue) && !isTooFar) {
-                        //         isTooFar = true;
-                        //         let venuePt = venue.geometry.getCentroid();
-                        //         let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
-                        //         let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
-                        //         let width = venue.isPoint() ? '4' : '12';
-                        //         that._mapLayer.addFeatures([
-                        //             new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: '#0FF', strokeDashstyle: dashStyle })
-                        //         ]);
-                        //     }
-
-                        //     // Check for closed places or invalid Google links.
-                        //     if (link.closed || link.notFound) {
-                        //         let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
-                        //         let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                        //         let width = venue.isPoint() ? '4' : '12';
-                        //         let color = link.notFound ? '#F0F' : '#F00';
-                        //         that._mapLayer.addFeatures([
-                        //             new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: color, strokeDashstyle: dashStyle })
-                        //         ]);
-                        //     }
-                        // }).catch(res => {
-                        //     console.log(res);
-                        // });
+                            // Check for closed places or invalid Google links.
+                            if (link.closed || link.notFound) {
+                                let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
+                                let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                                let width = venue.isPoint() ? '4' : '12';
+                                let color = link.notFound ? '#F0F' : '#F00';
+                                that._mapLayer.addFeatures([
+                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: color, strokeDashstyle: dashStyle })
+                                ]);
+                            }
+                        }).catch(res => {
+                            console.log(res);
+                        });
                     });
                 });
             }
@@ -355,23 +344,19 @@ class GoogleLinkEnhancer {
             return Promise.resolve(link);
         } else {
             return new Promise((resolve, reject) => {
-                let request = {
-                    placeId: id,
-                    fields: ['permanently_closed', 'geometry']
-                };
-                this._googleMapsApi.service.getDetails(request, (place, status) => {
-                    if (status == google.maps.places.PlacesServiceStatus.OK) {
-                        link = {
-                            loc: { lng: place.geometry.location.lng(), lat: place.geometry.location.lat() },
-                            closed: place.permanently_closed
-                        };
+                $.getJSON(this._urlOrigin + '/maps/api/place/details/json?fields=geometry,permanently_closed&key=AIzaSyCjQqKHs0Rck8uN-q6VcS9467-tRF3wEeY&placeid=' + id).then(json => {
+                    const link = {};
+                    if (json.status === "OK") {
+                        link.loc = json.result.geometry.location;
+                        link.closed = json.result.permanently_closed;
                         this._cacheLink(id, link);
-                        resolve(link);
-                    } else if (status == google.maps.places.PlacesServiceStatus.NOT_FOUND) {
-                        resolve(id, { notFound: true });
+                    } else if (json.status === "NOT_FOUND") {
+                        link.notfound = true;
+                        this._cacheLink(id, link);
                     } else {
-                        resolve(new Error('Google link lookup returned: ' + status));
+                        link = new Error('Google link lookup returned: ' + json.status);
                     }
+                    resolve(link);
                 });
             });
         }
