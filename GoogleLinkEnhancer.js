@@ -21,12 +21,14 @@ class GoogleLinkEnhancer {
     constructor() {
         this.EXT_PROV_ELEM_QUERY = 'li.external-provider-item';
         this.LINK_CACHE_NAME = 'gle_link_cache';
-        this.LINK_CACHE_CLEAN_INTERVAL_MIN = 1;   // Interval to remove old links and save new ones.
-        this.LINK_CACHE_LIFESPAN_HR = 6;          // Remove old links when they exceed this time limit.
+        this.LINK_CACHE_CLEAN_INTERVAL_MIN = 1; // Interval to remove old links and save new ones.
+        this.LINK_CACHE_LIFESPAN_HR = 6; // Remove old links when they exceed this time limit.
+        this.DEC = k => atob(atob(k));
         this._enabled = false;
+        this._disableApiUntil; // When a serious API error occurs (OVER_QUERY_LIMIT, REQUEST_DENIED), set this to a time in the future.
         this._mapLayer = null;
         this._urlOrigin = window.location.origin;
-        this._distanceLimit = 400;                // Default distance (meters) when Waze place is flagged for being too far from Google place.
+        this._distanceLimit = 400; // Default distance (meters) when Waze place is flagged for being too far from Google place.
         // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
 
         this.strings = {};
@@ -35,8 +37,10 @@ class GoogleLinkEnhancer {
         this.strings.linkedToThisPlace = 'Already linked to this place';
         this.strings.linkedNearby = 'Already linked to a nearby place';
         this.strings.linkedToXPlaces = 'This is linked to {0} places';
-        this.strings.badLink = 'Invalid Google link.  Please remove it.';
+        this.strings.badLink = 'Invalid Google link. Please remove it.';
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
+
+        this._urlBase = `${this._urlOrigin}/maps/api/place/details/json?fields=geometry,permanently_closed&${this.DEC('YTJWNVBVRkplbUZUZVVOV2VVb3hSMjVOY0dKc1gwNU5OMmhSY2pSUlRIaHBOR1ZDTkVSSlpVZ3RPQT09')}&placeid=`;
 
         this._initLZString();
 
@@ -262,7 +266,7 @@ class GoogleLinkEnhancer {
                 this._mapLayer.removeAllFeatures();
                 let drawnLinks = [];
                 W.model.venues.getObjectArray().forEach(function (venue) {
-                    let isTooFar = false;
+                    const promises = [];
                     venue.attributes.externalProviderIDs.forEach(provID => {
                         let id = provID.attributes.uuid;
 
@@ -294,36 +298,34 @@ class GoogleLinkEnhancer {
                             that._mapLayer.addFeatures(features);
                         }
 
-                        that._getLinkInfoAsync(id).then(link => {
-                            if (link instanceof Error) {
-                                console.error(link);
-                                return;
-                            }
-                            // Check for distance from Google POI.
-                            if (that._isLinkTooFar(link, venue) && !isTooFar) {
-                                isTooFar = true;
-                                let venuePt = venue.geometry.getCentroid();
-                                let dashStyle = 'solid'; //venue.isPoint() ? '2 6' : '2 16';
-                                let geometry = venue.isPoint() ? venuePt : venue.geometry.clone();
-                                let width = venue.isPoint() ? '4' : '12';
-                                that._mapLayer.addFeatures([
-                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: '#0FF', strokeDashstyle: dashStyle })
-                                ]);
-                            }
+                        // Get Google link info, and store results for processing.
+                        promises.push(that._getLinkInfoAsync(id));
+                    });
 
-                            // Check for closed places or invalid Google links.
-                            if (link.closed || link.notFound) {
-                                let dashStyle = link.closed && (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) ? (venue.isPoint() ? '2 6' : '2 16') : 'solid';
-                                let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                                let width = venue.isPoint() ? '4' : '12';
-                                let color = link.notFound ? '#F0F' : '#F00';
-                                that._mapLayer.addFeatures([
-                                    new OL.Feature.Vector(geometry, { strokeWidth: width, strokeColor: color, strokeDashstyle: dashStyle })
-                                ]);
+                    // Process all results of link lookups and add a highlight feature if needed.
+                    Promise.all(promises).then(results => {
+                        let strokeColor = null;
+                        let strokeDashStyle = 'solid';
+                        if (results.some(res => that._isLinkTooFar(res, venue))) {
+                            strokeColor = '#0FF';
+                        } else if (results.some(res => res.closed)) {
+                            if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
+                                || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
+                                strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
                             }
-                        }).catch(res => {
-                            console.log(res);
-                        });
+                            strokeColor = '#F00';
+                        } else if (results.some(res => res.notFound)) {
+                            strokeColor = '#F0F';
+                        }
+                        if (strokeColor) {
+                            const style = {
+                                strokeWidth: venue.isPoint() ? '4' : '12',
+                                strokeColor,
+                                strokeDashStyle
+                            }
+                            const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                            that._mapLayer.addFeatures([new OL.Feature.Vector(geometry, style)]);
+                        }
                     });
                 });
             }
@@ -343,20 +345,33 @@ class GoogleLinkEnhancer {
         if (link) {
             return Promise.resolve(link);
         } else {
+            if (this._disableApiUntil) {
+                if (Date.now() < this._disableApiUntil) {
+                    return Promise.resolve({ apiDisabled: true });
+                }
+                this._disableApiUntil = null;
+            }
             return new Promise((resolve, reject) => {
-                $.getJSON(this._urlOrigin + '/maps/api/place/details/json?fields=geometry,permanently_closed&key=AIzaSyCjQqKHs0Rck8uN-q6VcS9467-tRF3wEeY&placeid=' + id).then(json => {
-                    const link = {};
+                $.getJSON(`${this._urlBase}${id}`).then(json => {
+                    let res = {};
                     if (json.status === "OK") {
-                        link.loc = json.result.geometry.location;
-                        link.closed = json.result.permanently_closed;
-                        this._cacheLink(id, link);
+                        res.loc = json.result.geometry.location;
+                        res.closed = json.result.permanently_closed;
+                        this._cacheLink(id, res);
                     } else if (json.status === "NOT_FOUND") {
-                        link.notfound = true;
-                        this._cacheLink(id, link);
+                        res.notfound = true;
+                        this._cacheLink(id, res);
                     } else {
-                        link = new Error('Google link lookup returned: ' + json.status);
+                        if (this._disableApiUntil) {
+                            res.apiDisabled = true;
+                        } else {
+                            res.error = json.status;
+                            res.errorMessage = json.error_message;
+                            this._disableApiUntil = Date.now() + 5 * 60 * 1000 // Disable api calls for 5 minutes.
+                            console.error(GM_info.script.name, 'Google Link Enhancer disabled for 5 minutes due to API error: ' + res.error);
+                        }
                     }
-                    resolve(link);
+                    resolve(res);
                 });
             });
         }
@@ -526,8 +541,10 @@ class GoogleLinkEnhancer {
             }
         } else {
             this._getLinkInfoAsync(id).then(res => {
-                if (res instanceof Error) {
-                    console.error(res);
+                if (res.error) {
+                    console.error(GM_info.script.name, res);
+                } if (res.apiDisabled) {
+                    // API was temporarily disabled.  Ignore for now.
                 } else {
                     this._addPoint(id);
                 }
