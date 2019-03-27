@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2019.03.25.001
+// @version      2019.03.27.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -367,8 +367,8 @@ class GoogleLinkEnhancer {
                         } else {
                             res.error = json.status;
                             res.errorMessage = json.error_message;
-                            this._disableApiUntil = Date.now() + 5 * 60 * 1000 // Disable api calls for 5 minutes.
-                            console.error(GM_info.script.name, 'Google Link Enhancer disabled for 5 minutes due to API error: ' + res.error);
+                            this._disableApiUntil = Date.now() + 10 * 1000 // Disable api calls for 10 seconds.
+                            console.error(GM_info.script.name, 'Google Link Enhancer disabled for 10 seconds due to API error: ' + res.error);
                         }
                     }
                     resolve(res);
