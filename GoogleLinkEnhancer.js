@@ -232,7 +232,7 @@ class GoogleLinkEnhancer {
     }
 
     _isLinkTooFar(link, venue) {
-        if (link.loc) {
+        if (link.loc && !link.approxLoc) {
             let linkPt = new OL.Geometry.Point(link.loc.lng, link.loc.lat);
             linkPt.transform(W.map.displayProjection, W.map.projection);
             let venuePt;
@@ -355,6 +355,9 @@ class GoogleLinkEnhancer {
                 $.getJSON(`${this._urlBase}${id}`).then(json => {
                     let res = {};
                     if (json.status === "OK") {
+                        if (json.result.geometry.location_type === 'APPROXIMATE') {
+                            res.approxLoc = true;
+                        }
                         res.loc = json.result.geometry.location;
                         res.closed = json.result.permanently_closed;
                         this._cacheLink(id, res);
