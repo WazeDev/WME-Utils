@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2019.03.27.001
+// @version      2019.03.28.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -40,7 +40,7 @@ class GoogleLinkEnhancer {
         this.strings.badLink = 'Invalid Google link. Please remove it.';
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
-        this._urlBase = `${this._urlOrigin}/maps/api/place/details/json?fields=geometry,permanently_closed&${this.DEC('YTJWNVBVRkplbUZUZVVOV2VVb3hSMjVOY0dKc1gwNU5OMmhSY2pSUlRIaHBOR1ZDTkVSSlpVZ3RPQT09')}&placeid=`;
+        this._urlBase = `${this._urlOrigin}/maps/api/place/details/json?fields=geometry,permanently_closed&${this.DEC('YTJWNVBVRkplbUZUZVVObFltSkZVM0pYUlZKWk1VMVNXalUyWjBWQlpuQjBOM1JMTWxJMmFGWmZTUT09')}&placeid=`;
 
         this._initLZString();
 
