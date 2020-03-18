@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2019.11.20.001
+// @version      2020.03.18.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -19,6 +19,7 @@
 class GoogleLinkEnhancer {
 
     constructor() {
+        this.DISABLE_CLOSED_PLACES = true; // Set to TRUE if the "closed Google place" feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
         this.EXT_PROV_ELEM_QUERY = 'li.external-provider-item';
         this.LINK_CACHE_NAME = 'gle_link_cache';
         this.LINK_CACHE_CLEAN_INTERVAL_MIN = 1; // Interval to remove old links and save new ones.
@@ -308,7 +309,7 @@ class GoogleLinkEnhancer {
                         let strokeDashStyle = 'solid';
                         if (results.some(res => that._isLinkTooFar(res, venue))) {
                             strokeColor = '#0FF';
-                        } else if (results.some(res => res.closed)) {
+                        } else if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.closed)) {
                             if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
                                 || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
                                 strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
@@ -403,7 +404,7 @@ class GoogleLinkEnhancer {
 
             let link = this._linkCache[id];
             if (link) {
-                if (link.closed) {
+                if (link.closed && !this.DISABLE_CLOSED_PLACES) {
                     // A delay is needed to allow the UI to do its formatting so it doesn't overwrite ours.
                     // EDIT 2019.03.14 - Tested without the timeouts and it appears to be working now.
 
