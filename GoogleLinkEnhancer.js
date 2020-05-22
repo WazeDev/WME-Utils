@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2020.03.18.001
+// @version      2020.05.22.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -9,7 +9,7 @@
 // ==/UserScript==
 
 /* global $ */
-/* global OL */
+/* global OpenLayers */
 /* global Promise */
 /* global W */
 /* global Node */
@@ -127,10 +127,10 @@ class GoogleLinkEnhancer {
 
 
     _initLayer() {
-        this._mapLayer = new OL.Layer.Vector('Google Link Enhancements.', {
+        this._mapLayer = new OpenLayers.Layer.Vector('Google Link Enhancements.', {
             uniqueName: '___GoogleLinkEnhancements',
             displayInLayerSwitcher: true,
-            styleMap: new OL.StyleMap({
+            styleMap: new OpenLayers.StyleMap({
                 default: {
                     strokeColor: '${strokeColor}',
                     strokeWidth: '${strokeWidth}',
@@ -234,7 +234,7 @@ class GoogleLinkEnhancer {
 
     _isLinkTooFar(link, venue) {
         if (link.loc) {
-            let linkPt = new OL.Geometry.Point(link.loc.lng, link.loc.lat);
+            let linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
             linkPt.transform(W.map.displayProjection, W.map.getProjectionObject());
             let venuePt;
             let distanceLimit;
@@ -277,7 +277,7 @@ class GoogleLinkEnhancer {
                             let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
                             let width = venue.isPoint() ? '4' : '12';
                             let color = '#fb8d00';
-                            let features = [new OL.Feature.Vector(geometry, {
+                            let features = [new OpenLayers.Feature.Vector(geometry, {
                                 strokeWidth: width, strokeColor: color
                             })];
                             let lineStart = geometry.getCentroid();
@@ -285,8 +285,8 @@ class GoogleLinkEnhancer {
                                 if (linkVenue !== venue
                                     && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
                                     features.push(
-                                        new OL.Feature.Vector(
-                                            new OL.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
+                                        new OpenLayers.Feature.Vector(
+                                            new OpenLayers.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
                                             {
                                                 strokeWidth: 4,
                                                 strokeColor: color,
@@ -325,7 +325,7 @@ class GoogleLinkEnhancer {
                                 strokeDashStyle
                             }
                             const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                            that._mapLayer.addFeatures([new OL.Feature.Vector(geometry, style)]);
+                            that._mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, style)]);
                         }
                     });
                 });
@@ -472,18 +472,18 @@ class GoogleLinkEnhancer {
         if (link) {
             if (!link.notFound) {
                 let coord = link.loc;
-                let poiPt = new OL.Geometry.Point(coord.lng, coord.lat);
+                let poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
                 poiPt.transform(W.map.displayProjection, W.map.getProjectionObject());
                 let placeGeom = this._getSelectedFeatures()[0].geometry.getCentroid();
-                let placePt = new OL.Geometry.Point(placeGeom.x, placeGeom.y);
+                let placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
                 let ext = W.map.getExtent();
-                var lsBounds = new OL.Geometry.LineString([
-                    new OL.Geometry.Point(ext.left, ext.bottom),
-                    new OL.Geometry.Point(ext.left, ext.top),
-                    new OL.Geometry.Point(ext.right, ext.top),
-                    new OL.Geometry.Point(ext.right, ext.bottom),
-                    new OL.Geometry.Point(ext.left, ext.bottom)]);
-                let lsLine = new OL.Geometry.LineString([placePt, poiPt]);
+                var lsBounds = new OpenLayers.Geometry.LineString([
+                    new OpenLayers.Geometry.Point(ext.left, ext.bottom),
+                    new OpenLayers.Geometry.Point(ext.left, ext.top),
+                    new OpenLayers.Geometry.Point(ext.right, ext.top),
+                    new OpenLayers.Geometry.Point(ext.right, ext.bottom),
+                    new OpenLayers.Geometry.Point(ext.left, ext.bottom)]);
+                let lsLine = new OpenLayers.Geometry.LineString([placePt, poiPt]);
 
                 // If the line extends outside the bounds, split it so we don't draw a line across the world.
                 let splits = lsLine.splitWith(lsBounds);
@@ -495,7 +495,7 @@ class GoogleLinkEnhancer {
                             if (component.x === placePt.x && component.y === placePt.y) splitPoints = split;
                         });
                     });
-                    lsLine = new OL.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
+                    lsLine = new OpenLayers.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
                     let distance = poiPt.distanceTo(placePt);
                     let unitConversion, unit1, unit2;
                     if (W.model.isImperial) {
@@ -518,14 +518,14 @@ class GoogleLinkEnhancer {
                 }
 
                 this._destroyPoint();  // Just in case it still exists.
-                this._ptFeature = new OL.Feature.Vector(poiPt, { poiCoord: true }, {
+                this._ptFeature = new OpenLayers.Feature.Vector(poiPt, { poiCoord: true }, {
                     pointRadius: 6,
                     strokeWidth: 30,
                     strokeColor: '#FF0',
                     fillColor: '#FF0',
                     strokeOpacity: 0.5
                 });
-                this._lineFeature = new OL.Feature.Vector(lsLine, {}, {
+                this._lineFeature = new OpenLayers.Feature.Vector(lsLine, {}, {
                     strokeWidth: 3,
                     strokeDashstyle: '12 8',
                     strokeColor: '#FF0',
