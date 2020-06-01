@@ -537,7 +537,7 @@ class GoogleLinkEnhancer {
                     labelOutlineWidth: 4,
                     fontSize: '18'
                 });
-                W.map.getLayerByUniqueName('landmarks').addFeatures([this._ptFeature, this._lineFeature]);
+                W.map.getLayerByUniqueName('venues').addFeatures([this._ptFeature, this._lineFeature]);
                 this._timeoutDestroyPoint();
             }
         } else {
