@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2020.05.22.001
+// @version      2020.08.12.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -19,7 +19,7 @@
 class GoogleLinkEnhancer {
 
     constructor() {
-        this.DISABLE_CLOSED_PLACES = true; // Set to TRUE if the "closed Google place" feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
+        this.DISABLE_CLOSED_PLACES = false; // Set to TRUE if the "closed Google place" feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
         this.EXT_PROV_ELEM_QUERY = 'li.external-provider-item';
         this.LINK_CACHE_NAME = 'gle_link_cache';
         this.LINK_CACHE_CLEAN_INTERVAL_MIN = 1; // Interval to remove old links and save new ones.
@@ -33,7 +33,8 @@ class GoogleLinkEnhancer {
         // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
 
         this.strings = {};
-        this.strings.closedPlace = 'Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.';
+        this.strings.permClosedPlace = 'Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.';
+        this.strings.tempClosedPlace = 'Google indicates this place is temporarily closed.';
         this.strings.multiLinked = 'Linked more than once already. Please find and remove multiple links.';
         this.strings.linkedToThisPlace = 'Already linked to this place';
         this.strings.linkedNearby = 'Already linked to a nearby place';
@@ -41,7 +42,7 @@ class GoogleLinkEnhancer {
         this.strings.badLink = 'Invalid Google link. Please remove it.';
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
-        this._urlBase = `${this._urlOrigin}/maps/api/place/details/json?fields=geometry,permanently_closed&${this.DEC('YTJWNVBVRkplbUZUZVVObFltSkZVM0pYUlZKWk1VMVNXalUyWjBWQlpuQjBOM1JMTWxJMmFGWmZTUT09')}&placeid=`;
+        this._urlBase = `${this._urlOrigin}/maps/api/place/details/json?fields=geometry,business_status&${this.DEC('YTJWNVBVRkplbUZUZVVObFltSkZVM0pYUlZKWk1VMVNXalUyWjBWQlpuQjBOM1JMTWxJMmFGWmZTUT09')}&placeid=`;
 
         this._initLZString();
 
@@ -309,12 +310,18 @@ class GoogleLinkEnhancer {
                         let strokeDashStyle = 'solid';
                         if (results.some(res => that._isLinkTooFar(res, venue))) {
                             strokeColor = '#0FF';
-                        } else if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.closed)) {
+                        } else if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
                             if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
                                 || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
                                 strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
                             }
                             strokeColor = '#F00';
+                        } else if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.tempclosed)) {
+                            if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name)
+                                || /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
+                                strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
+                            }
+                            strokeColor = '#FD3';
                         } else if (results.some(res => res.notFound)) {
                             strokeColor = '#F0F';
                         }
@@ -357,7 +364,11 @@ class GoogleLinkEnhancer {
                     let res = {};
                     if (json.status === "OK") {
                         res.loc = json.result.geometry.location;
-                        res.closed = json.result.permanently_closed;
+                        if (json.result.business_status == "CLOSED_PERMANENTLY") {
+                            res.permclosed = true;
+                        } else if (json.result.business_status == "CLOSED_TEMPORARILY") {
+                            res.tempclosed = true;
+                        }
                         this._cacheLink(id, res);
                     } else if (json.status === "NOT_FOUND") {
                         res.notfound = true;
@@ -404,12 +415,16 @@ class GoogleLinkEnhancer {
 
             let link = this._linkCache[id];
             if (link) {
-                if (link.closed && !this.DISABLE_CLOSED_PLACES) {
+                if (link.permclosed && !this.DISABLE_CLOSED_PLACES) {
                     // A delay is needed to allow the UI to do its formatting so it doesn't overwrite ours.
                     // EDIT 2019.03.14 - Tested without the timeouts and it appears to be working now.
 
                     //setTimeout(() => {
-                    $childEl.find('div.uuid').css({ backgroundColor: '#FAA' }).attr('title', this.strings.closedPlace);
+                    $childEl.find('div.uuid').css({ backgroundColor: '#FAA' }).attr('title', this.strings.permClosedPlace);
+                    //}, 50);
+                } else if (link.tempclosed && !this.DISABLE_CLOSED_PLACES) {
+                    //setTimeout(() => {
+                    $childEl.find('div.uuid').css({ backgroundColor: '#FFA' }).attr('title', this.strings.tempClosedPlace);
                     //}, 50);
                 } else if (link.notFound) {
                     //setTimeout(() => {
