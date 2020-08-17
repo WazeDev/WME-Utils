@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2020.08.12.001
+// @version      2020.08.16.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -32,6 +32,7 @@ class GoogleLinkEnhancer {
         this._distanceLimit = 400; // Default distance (meters) when Waze place is flagged for being too far from Google place.
         // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
 
+		this._showTempClosedPOIs = true;
         this.strings = {};
         this.strings.permClosedPlace = 'Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.';
         this.strings.tempClosedPlace = 'Google indicates this place is temporarily closed.';
@@ -205,6 +206,15 @@ class GoogleLinkEnhancer {
         this._distanceLimit = value;
         this._processPlaces();
     }
+	
+	get showTempClosedPOIs(){
+		return this._showTempClosedPOIs;
+	}
+	
+	set showTempClosedPOIs(value){
+		this._showTempClosedPOIs = value;
+		this._processPlaces();
+	}
 
     _onWindowUnload(evt) {
         evt.data._cleanAndSaveLinkCache();
@@ -316,7 +326,7 @@ class GoogleLinkEnhancer {
                                 strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
                             }
                             strokeColor = '#F00';
-                        } else if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.tempclosed)) {
+                        } else if (!that.DISABLE_CLOSED_PLACES && that._showTempClosedPOIs && results.some(res => res.tempclosed)) {
                             if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name)
                                 || /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
                                 strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
