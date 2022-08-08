@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2021.07.27.001
+// @version      2022.08.08.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -32,7 +32,7 @@ class GoogleLinkEnhancer {
         this._distanceLimit = 400; // Default distance (meters) when Waze place is flagged for being too far from Google place.
         // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
 
-		this._showTempClosedPOIs = true;
+        this._showTempClosedPOIs = true;
         this.strings = {};
         this.strings.permClosedPlace = 'Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.';
         this.strings.tempClosedPlace = 'Google indicates this place is temporarily closed.';
@@ -69,8 +69,17 @@ class GoogleLinkEnhancer {
                 for (let idx = 0; idx < mutation.addedNodes.length; idx++) {
                     let nd = mutation.addedNodes[idx];
                     if (nd.nodeType === Node.ELEMENT_NODE) {
-                        let $el = $(nd);
-                        if ($el.is(this.EXT_PROV_ELEM_QUERY)) {
+                        var $el = $(nd);
+                        // elements under a shadowroot dont show up here, so trigger on an item that
+                        // does get added when a venue is selected, then search for ext provider elements.
+                        if (nd.nodeName == "INPUT" && nd.defaultValue == "TAKE_AWAY") {
+                            var ex = document.getElementsByClassName("external-provider-content");
+                            for (let i2 = 0; i2 < ex.length; i2++){
+                                $el = $(ex[i2]);
+                                this._addHoverEvent($el);
+                            }
+                        }
+                        else if ($el.is(this.EXT_PROV_ELEM_QUERY)) {
                             this._addHoverEvent($el);
                         } else {
                             if ($el.find('div.uuid').length) {
@@ -79,6 +88,7 @@ class GoogleLinkEnhancer {
                         }
                     }
                 }
+
             });
         });
 
@@ -126,7 +136,6 @@ class GoogleLinkEnhancer {
             };
         })(jQuery);
     }
-
 
     _initLayer() {
         this._mapLayer = new OpenLayers.Layer.Vector('Google Link Enhancements.', {
@@ -206,7 +215,7 @@ class GoogleLinkEnhancer {
         this._distanceLimit = value;
         this._processPlaces();
     }
-	
+
 	get showTempClosedPOIs(){
 		return this._showTempClosedPOIs;
 	}
@@ -246,7 +255,7 @@ class GoogleLinkEnhancer {
     _isLinkTooFar(link, venue) {
         if (link.loc) {
             let linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
-            linkPt.transform(W.map.getOLMap().displayProjection, W.map.getProjectionObject());
+            linkPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
             let venuePt;
             let distanceLimit;
             if (venue.isPoint()) {
@@ -270,7 +279,7 @@ class GoogleLinkEnhancer {
         try {
             if (this._enabled) {
                 let that = this;
-                let projFrom = W.map.getOLMap().displayProjection;
+                let projFrom = W.Config.map.projection.remote; // W.map.getOLMap().displayProjection;
                 let projTo = W.map.getProjectionObject();
                 let mapExtent = W.map.getExtent();
                 // Get a list of already-linked id's
@@ -498,7 +507,7 @@ class GoogleLinkEnhancer {
             if (!link.notFound) {
                 let coord = link.loc;
                 let poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
-                poiPt.transform(W.map.getOLMap().displayProjection, W.map.getProjectionObject());
+                poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
                 let placeGeom = this._getSelectedFeatures()[0].geometry.getCentroid();
                 let placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
                 let ext = W.map.getExtent();
@@ -582,8 +591,28 @@ class GoogleLinkEnhancer {
         this._timeoutID = setTimeout(() => this._destroyPoint(), 4000);
     }
 
+    _getSelectedVenue() {
+        const features = W.selectionManager.getSelectedFeatures();
+        // Be sure to check for features.length === 1, in case multiple venues are currently selected.
+        return features.length === 1 && features[0].model.type === 'venue'
+            ? features[0].model : undefined;
+    }
+
     _getIdFromElement($el) {
-        return $el.find('input.uuid').attr('value');
+        const venue = this._getSelectedVenue();
+        const links = venue.attributes.externalProviderIDs;
+        const url = $el[0].parentNode.getElementsByClassName("url")[0].href;
+
+        let id = "";
+        for (var ln in links) {
+            var lnk = links[ln];
+            const u = lnk.attributes.url;
+            if (u == url) {
+                id = lnk.attributes.id;
+                break;
+            }
+        }
+        return id;
     }
 
     _addHoverEvent($el) {
