@@ -14,19 +14,19 @@
 /* global W */
 /* global Node */
 
-/* eslint-disable */
-
+// /* eslint-disable */
+/* eslint-disable no-unused-vars */
 class GoogleLinkEnhancer {
-
+    /* eslint-enable no-unused-vars */
     constructor() {
-        this.DISABLE_CLOSED_PLACES = false; // Set to TRUE if the "closed Google place" feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
+        this.DISABLE_CLOSED_PLACES = false; // Set to TRUE if "closed places" feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
         this.EXT_PROV_ELEM_QUERY = 'li.external-provider-item';
         this.LINK_CACHE_NAME = 'gle_link_cache';
         this.LINK_CACHE_CLEAN_INTERVAL_MIN = 1; // Interval to remove old links and save new ones.
         this.LINK_CACHE_LIFESPAN_HR = 6; // Remove old links when they exceed this time limit.
         this.DEC = k => atob(atob(k));
         this._enabled = false;
-        this._disableApiUntil; // When a serious API error occurs (OVER_QUERY_LIMIT, REQUEST_DENIED), set this to a time in the future.
+        this._disableApiUntil = null; // When a serious API error occurs (OVER_QUERY_LIMIT, REQUEST_DENIED), set this to a time in the future.
         this._mapLayer = null;
         this._urlOrigin = window.location.origin;
         this._distanceLimit = 400; // Default distance (meters) when Waze place is flagged for being too far from Google place.
@@ -47,9 +47,9 @@ class GoogleLinkEnhancer {
 
         this._initLZString();
 
-        let storedCache = localStorage.getItem(this.LINK_CACHE_NAME);
+        const STORED_CACHE = localStorage.getItem(this.LINK_CACHE_NAME);
         try {
-            this._linkCache = storedCache ? $.parseJSON(this._LZString.decompressFromUTF16(storedCache)) : {};
+            this._linkCache = STORED_CACHE ? $.parseJSON(this._LZString.decompressFromUTF16(STORED_CACHE)) : {};
         } catch (ex) {
             if (ex.name === 'SyntaxError') {
                 // In case the cache is corrupted and can't be read.
