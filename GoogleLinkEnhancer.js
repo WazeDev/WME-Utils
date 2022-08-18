@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2022.08.12.001
+// @version      2022.08.14.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -33,6 +33,8 @@ class GoogleLinkEnhancer {
         this._urlOrigin = window.location.origin;
         this._distanceLimit = 400; // Default distance (meters) when Waze place is flagged for being too far from Google place.
         // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
+        this._fmtCount = 0;
+        this._fmtWaiting = false;
 
         this._showTempClosedPOIs = true;
         this.strings = {};
@@ -100,6 +102,14 @@ class GoogleLinkEnhancer {
                     }
                 }
             });
+            this._fmtCount++;
+            // console.log('GLE fmt count: ' + this._fmtCount + " waiting: " + this._fmtWaiting.toString());
+            if (!this._fmtWaiting) {
+                setTimeout(() => {
+                    this._formatLinkElements();
+                }, 500);
+                this._fmtWaiting = true;
+            }
         });
 
         // Watch for Google place search result list items being added to the DOM
@@ -290,8 +300,8 @@ class GoogleLinkEnhancer {
         try {
             if (this._enabled) {
                 let that = this;
-                let projFrom = W.Config.map.projection.remote; // W.map.getOLMap().displayProjection;
-                let projTo = W.map.getProjectionObject();
+                let projFrom = W.Config.map.projection.remote;
+                let projTo = W.Config.map.projection.local;
                 let mapExtent = W.map.getExtent();
                 // Get a list of already-linked id's
                 let existingLinks = this._getExistingLinks();
@@ -438,18 +448,30 @@ class GoogleLinkEnhancer {
 
     _formatLinkElements(a, b, c) {
         let existingLinks = this._getExistingLinks();
-        $('#edit-panel').find(this.EXT_PROV_ELEM_QUERY).each((ix, childEl) => {
-            console.log('GLE: ' + childEl);
+        var $links = $('#edit-panel').find(this.EXT_PROV_ELEM_QUERY);
+        for (let ix = 0; ix < $links.length; ix++) {
+            var childEl = $links[ix];
+            //console.log('GLE fLE: ', childEl);
             let $childEl = $(childEl);
             let id = this._getIdFromElement($childEl);
+            //console.log('GLE fLE id: ' + id);
+
+            // if its cid entry, look for the uuid match
+            if (id.indexOf("cid") == 0) {
+                Object.keys(existingLinks).forEach(id2 => {
+                    let elink = existingLinks[id2];
+                    if (elink.hasOwnProperty('url') && elink.url == id) {
+                        id = id2;
+                        }
+                    });
+            }
+            let link = this._linkCache[id];
             if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
                 setTimeout(() => {
                     $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA500' }).attr({ 'title': this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count) });
                 }, 50);
             }
             this._addHoverEvent($(childEl));
-
-            let link = this._linkCache[id];
             if (link) {
                 if (link.permclosed && !this.DISABLE_CLOSED_PLACES) {
                     // A delay is needed to allow the UI to do its formatting so it doesn't overwrite ours.
@@ -473,9 +495,13 @@ class GoogleLinkEnhancer {
                         $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
                         //}, 50);
                     }
+                    else {  // reset in case we just deleted another provider
+                        $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '' }).attr('title', '');
+                    }
                 }
             }
-        });
+        }
+        this._fmtWaiting = false;
     }
 
     _getExistingLinks() {
@@ -498,6 +524,10 @@ class GoogleLinkEnhancer {
                     } else {
                         link = { count: 1, venues: [venue] };
                         existingLinks[id] = link;
+                        if (provID.attributes.url != null) {
+                            var u = provID.attributes.url.replace('https://maps.google.com/?', '');
+                            link.url = u;
+                        }
                     }
                     link.isThisVenue = link.isThisVenue || isThisVenue;
                 }
@@ -609,7 +639,11 @@ class GoogleLinkEnhancer {
     }
 
     _getIdFromElement($el) {
-        return $el.find('a.url')[0].href.replace('https://maps.google.com/?', '');
+        var id = "";
+        var $url = $el.find('a.url');
+        if ($url.length > 0)
+            id = $url[0].href.replace('https://maps.google.com/?', '');
+        return id;
     }
 
     _addHoverEvent($el) {
