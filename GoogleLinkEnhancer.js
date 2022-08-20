@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2022.08.14.001
+// @version      2022.08.20.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -13,13 +13,15 @@
 /* global Promise */
 /* global W */
 /* global Node */
+/* global jQuery */
+/* global GM_info */
 
 // /* eslint-disable */
 /* eslint-disable no-unused-vars */
 class GoogleLinkEnhancer {
     /* eslint-enable no-unused-vars */
     constructor() {
-        this.DISABLE_CLOSED_PLACES = false; // Set to TRUE if the "closed Google place" feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
+        this.DISABLE_CLOSED_PLACES = false; // Set to TRUE if the feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
         this.EXT_PROV_ELEM_QUERY = 'wz-list-item.external-provider';
         this.EXT_PROV_ELEM_EDIT_QUERY = 'wz-list-item.external-provider-edit';
         this.EXT_PROV_ELEM_CONTENT_QUERY = 'div.external-provider-content';
@@ -71,31 +73,26 @@ class GoogleLinkEnhancer {
         this._linkObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 for (let idx = 0; idx < mutation.addedNodes.length; idx++) {
-                    let nd = mutation.addedNodes[idx];
+                    const nd = mutation.addedNodes[idx];
                     if (nd.nodeType === Node.ELEMENT_NODE) {
-                        let $el = $(nd);
-                        let $subel = $el.find(this.EXT_PROV_ELEM_QUERY);
+                        const $el = $(nd);
+                        const $subel = $el.find(this.EXT_PROV_ELEM_QUERY);
                         if ($el.is(this.EXT_PROV_ELEM_QUERY)) {
                             this._addHoverEvent($el);
-                        }
-                        else if ($subel.length) {
+                        } else if ($subel.length) {
                             for (let i = 0; i < $subel.length; i++) {
                                 this._addHoverEvent($($subel[i]));
                             }
-                        } else {
-                            //if ($el.is('a.url')) {
-                                //this._formatLinkElements();
-                            //}
                         }
                         if ($el.is(this.EXT_PROV_ELEM_EDIT_QUERY)) {
-                            this._searchResultsObserver.observe($el.find('wz-autocomplete')[0].shadowRoot, { childList: true, subtree: true });
+                            this._searchResultsObserver.observe($el.find('wz-autocomplete[placeholder="Search for a place"]')[0].shadowRoot, { childList: true, subtree: true });
                         }
                     }
                 }
                 for (let idx = 0; idx < mutation.removedNodes.length; idx++) {
-                    let nd = mutation.removedNodes[idx];
+                    const nd = mutation.removedNodes[idx];
                     if (nd.nodeType === Node.ELEMENT_NODE) {
-                        let $el = $(nd);
+                        const $el = $(nd);
                         if ($el.is(this.EXT_PROV_ELEM_EDIT_QUERY)) {
                             this._searchResultsObserver.disconnect();
                         }
@@ -113,11 +110,11 @@ class GoogleLinkEnhancer {
         });
 
         // Watch for Google place search result list items being added to the DOM
-        let that = this;
+        const that = this;
         this._searchResultsObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 for (let idx = 0; idx < mutation.addedNodes.length; idx++) {
-                    let nd = mutation.addedNodes[idx];
+                    const nd = mutation.addedNodes[idx];
                     if (nd.nodeType === Node.ELEMENT_NODE && $(nd).is('wz-menu-item.simple-item')) {
                         $(nd).mouseenter(() => {
                             // When mousing over a list item, find the Google place ID from the list that was stored previously.
@@ -136,7 +133,7 @@ class GoogleLinkEnhancer {
         this._modeObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 for (let idx = 0; idx < mutation.addedNodes.length; idx++) {
-                    let nd = mutation.addedNodes[idx];
+                    const nd = mutation.addedNodes[idx];
                     if (nd.nodeType === Node.ELEMENT_NODE && $(nd).is('.sidebar-layout')) {
                         this._observeLinks();
                         break;
@@ -146,6 +143,7 @@ class GoogleLinkEnhancer {
         });
 
         // This is a special event that will be triggered when DOM elements are destroyed.
+        /* eslint-disable wrap-iife, func-names, object-shorthand */
         (function ($) {
             $.event.special.destroyed = {
                 remove: function (o) {
@@ -155,8 +153,8 @@ class GoogleLinkEnhancer {
                 }
             };
         })(jQuery);
+        /* eslint-enable wrap-iife, func-names, object-shorthand */
     }
-
 
     _initLayer() {
         this._mapLayer = new OpenLayers.Layer.Vector('Google Link Enhancements.', {
@@ -177,33 +175,23 @@ class GoogleLinkEnhancer {
 
         W.map.addLayer(this._mapLayer);
 
-        W.model.events.register('mergeend', this, function (e) {
-            this._processPlaces();
-        }, true);
-
-        // *************************************
-        // EDIT 2019.03.14 - Not sure if this is needed.  Mergeend event seems to work fine.
-        // Removing it for now, but not thoroughly tested.
-        // *************************************
-        // W.map.events.register('moveend', this, function (e) {
-        //     this._processPlaces();
-        // }, true);
-
-        W.model.venues.on('objectschanged', function (e) { this._processPlaces(); }, this);
-        W.model.venues.on('objectsremoved', function (e) { this._processPlaces(); }, this);
-        W.model.venues.on('objectsadded', function (e) { this._processPlaces(); }, this);
+        // NOTE: Arrow functions are necessary for calling methods on object instances.
+        // This could be made more efficient by only processing the relevant places.
+        W.model.events.register('mergeend', null, () => { this._processPlaces(); });
+        W.model.venues.on('objectschanged', () => { this._processPlaces(); });
+        W.model.venues.on('objectsremoved', () => { this._processPlaces(); });
+        W.model.venues.on('objectsadded', () => { this._processPlaces(); });
     }
 
     enable() {
         if (!this._enabled) {
             this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
             this._observeLinks();
-            //this._searchResultsObserver.observe($('#edit-panel')[0], { childList: true, subtree: true });
             // Watch for JSONP callbacks. JSONP is used for the autocomplete results when searching for Google links.
             this._addJsonpInterceptor();
             // Note: Using on() allows passing "this" as a variable, so it can be used in the handler function.
-            $('#map').on('mouseenter', null, this, this._onMapMouseenter);
-            $(window).on('unload', null, this, this._onWindowUnload);
+            $('#map').on('mouseenter', null, this, GoogleLinkEnhancer._onMapMouseenter);
+            $(window).on('unload', null, this, GoogleLinkEnhancer._onWindowUnload);
             W.model.venues.on('objectschanged', this._formatLinkElements, this);
             this._processPlaces();
             this._cleanAndSaveLinkCache();
@@ -218,7 +206,7 @@ class GoogleLinkEnhancer {
             this._linkObserver.disconnect();
             this._searchResultsObserver.disconnect();
             this._removeJsonpInterceptor();
-            $('#map').off('mouseenter', this._onMapMouseenter);
+            $('#map').off('mouseenter', GoogleLinkEnhancer._onMapMouseenter);
             $(window).off('unload', null, this, this._onWindowUnload);
             W.model.venues.off('objectschanged', this._formatLinkElements, this);
             if (this._cacheCleanIntervalID) clearInterval(this._cacheCleanIntervalID);
@@ -232,29 +220,30 @@ class GoogleLinkEnhancer {
     get distanceLimit() {
         return this._distanceLimit;
     }
+
     set distanceLimit(value) {
         this._distanceLimit = value;
         this._processPlaces();
     }
 
-    get showTempClosedPOIs(){
+    get showTempClosedPOIs() {
         return this._showTempClosedPOIs;
     }
 
-    set showTempClosedPOIs(value){
+    set showTempClosedPOIs(value) {
         this._showTempClosedPOIs = value;
         this._processPlaces();
     }
 
-    _onWindowUnload(evt) {
+    static _onWindowUnload(evt) {
         evt.data._cleanAndSaveLinkCache();
     }
 
     _cleanAndSaveLinkCache() {
         if (!this._linkCache) return;
-        let now = new Date();
+        const now = new Date();
         Object.keys(this._linkCache).forEach(id => {
-            let link = this._linkCache[id];
+            const link = this._linkCache[id];
             // Bug fix:
             if (link.location) {
                 link.loc = link.location;
@@ -266,73 +255,69 @@ class GoogleLinkEnhancer {
             }
         });
         localStorage.setItem(this.LINK_CACHE_NAME, this._LZString.compressToUTF16(JSON.stringify(this._linkCache)));
-        //console.log('link cache count: ' + Object.keys(this._linkCache).length, this._linkCache);
+        // console.log('link cache count: ' + Object.keys(this._linkCache).length, this._linkCache);
     }
 
-    _distanceBetweenPoints(x1, y1, x2, y2) {
-        return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
+    static _distanceBetweenPoints(x1, y1, x2, y2) {
+        return Math.sqrt(((x1 - x2) ** 2) + ((y1 - y2) ** 2));
     }
 
     _isLinkTooFar(link, venue) {
         if (link.loc) {
-            let linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
+            const linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
             linkPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
             let venuePt;
-            let distanceLimit;
+            let distanceLim;
             if (venue.isPoint()) {
                 venuePt = venue.geometry.getCentroid();
-                distanceLimit = this.distanceLimit;
+                distanceLim = this.distanceLimit;
             } else {
-                let bounds = venue.geometry.getBounds();
-                let center = bounds.getCenterLonLat();
+                const bounds = venue.geometry.getBounds();
+                const center = bounds.getCenterLonLat();
                 venuePt = { x: center.lon, y: center.lat };
-                distanceLimit = this._distanceBetweenPoints(center.lon, center.lat, bounds.right, bounds.top) + this.distanceLimit;
+                distanceLim = GoogleLinkEnhancer._distanceBetweenPoints(center.lon, center.lat, bounds.right, bounds.top) + this.distanceLimit;
             }
-            let distance = this._distanceBetweenPoints(linkPt.x, linkPt.y, venuePt.x, venuePt.y);
-
-            return distance > distanceLimit;
-        } else {
-            return false;
+            const distance = GoogleLinkEnhancer._distanceBetweenPoints(linkPt.x, linkPt.y, venuePt.x, venuePt.y);
+            return distance > distanceLim;
         }
+        return false;
     }
 
     _processPlaces() {
         try {
             if (this._enabled) {
-                let that = this;
-                let projFrom = W.Config.map.projection.remote;
-                let projTo = W.Config.map.projection.local;
-                let mapExtent = W.map.getExtent();
+                const that = this;
                 // Get a list of already-linked id's
-                let existingLinks = this._getExistingLinks();
+                const existingLinks = GoogleLinkEnhancer._getExistingLinks();
                 this._mapLayer.removeAllFeatures();
-                let drawnLinks = [];
-                W.model.venues.getObjectArray().forEach(function (venue) {
+                const drawnLinks = [];
+                W.model.venues.getObjectArray().forEach(venue => {
                     const promises = [];
                     venue.attributes.externalProviderIDs.forEach(provID => {
-                        let id = provID.attributes.uuid;
+                        const id = provID.attributes.uuid;
 
                         // Check for duplicate links
-                        let linkInfo = existingLinks[id];
+                        const linkInfo = existingLinks[id];
                         if (linkInfo.count > 1) {
-                            let geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                            let width = venue.isPoint() ? '4' : '12';
-                            let color = '#fb8d00';
-                            let features = [new OpenLayers.Feature.Vector(geometry, {
+                            const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                            const width = venue.isPoint() ? '4' : '12';
+                            const color = '#fb8d00';
+                            const features = [new OpenLayers.Feature.Vector(geometry, {
                                 strokeWidth: width, strokeColor: color
                             })];
-                            let lineStart = geometry.getCentroid();
+                            const lineStart = geometry.getCentroid();
                             linkInfo.venues.forEach(linkVenue => {
-                                if (linkVenue !== venue &&
-                                    !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
+                                if (linkVenue !== venue
+                                    && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
                                     features.push(
                                         new OpenLayers.Feature.Vector(
                                             new OpenLayers.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
                                             {
                                                 strokeWidth: 4,
                                                 strokeColor: color,
-                                                strokeDashstyle: '12 12',
-                                            })
+                                                strokeDashstyle: '12 12'
+                                            }
+                                        )
                                     );
                                     drawnLinks.push([venue, linkVenue]);
                                 }
@@ -351,14 +336,14 @@ class GoogleLinkEnhancer {
                         if (results.some(res => that._isLinkTooFar(res, venue))) {
                             strokeColor = '#0FF';
                         } else if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
-                            if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name) ||
-                                /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
+                            if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
+                                || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
                                 strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
                             }
                             strokeColor = '#F00';
                         } else if (!that.DISABLE_CLOSED_PLACES && that._showTempClosedPOIs && results.some(res => res.tempclosed)) {
-                            if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name) ||
-                                /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
+                            if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name)
+                                || /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
                                 strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
                             }
                             strokeColor = '#FD3';
@@ -385,117 +370,103 @@ class GoogleLinkEnhancer {
     _cacheLink(id, link) {
         link.ts = new Date();
         this._linkCache[id] = link;
-        //console.log('link cache count: ' + Object.keys(this._linkCache).length, this._linkCache);
+        // console.log('link cache count: ' + Object.keys(this._linkCache).length, this._linkCache);
     }
 
     _getLinkInfoAsync(id) {
-        var link = this._linkCache[id];
+        const link = this._linkCache[id];
         if (link) {
             return Promise.resolve(link);
-        } else {
-            if (this._disableApiUntil) {
-                if (Date.now() < this._disableApiUntil) {
-                    return Promise.resolve({ apiDisabled: true });
-                }
-                this._disableApiUntil = null;
-            }
-            return new Promise((resolve, reject) => {
-                let fullUrl = this._urlBase;
-                if (id.startsWith("q=") || id.startsWith("cid=")) {
-                    fullUrl += id;
-                } else {
-                    fullUrl += `place_id=${id}`;
-                }
-                $.getJSON(fullUrl).then(json => {
-                    let res = {};
-                    if (json.status === "OK") {
-                        res.loc = json.result.geometry.location;
-                        if (json.result.business_status == "CLOSED_PERMANENTLY") {
-                            res.permclosed = true;
-                        } else if (json.result.business_status == "CLOSED_TEMPORARILY") {
-                            res.tempclosed = true;
-                        }
-                        this._cacheLink(id, res);
-                    } else if (json.status === "NOT_FOUND") {
-                        res.notfound = true;
-                        this._cacheLink(id, res);
-                    } else {
-                        if (this._disableApiUntil) {
-                            res.apiDisabled = true;
-                        } else {
-                            res.error = json.status;
-                            res.errorMessage = json.error_message;
-                            this._disableApiUntil = Date.now() + 10 * 1000; // Disable api calls for 10 seconds.
-                            console.error(GM_info.script.name + ', Google Link Enhancer disabled for 10 seconds due to API error.', res);
-                        }
-                    }
-                    resolve(res);
-                });
-            });
         }
+        if (this._disableApiUntil) {
+            if (Date.now() < this._disableApiUntil) {
+                return Promise.resolve({ apiDisabled: true });
+            }
+            this._disableApiUntil = null;
+        }
+        return new Promise(resolve => {
+            let fullUrl = this._urlBase;
+            if (id.startsWith('q=') || id.startsWith('cid=')) {
+                fullUrl += id;
+            } else {
+                fullUrl += `place_id=${id}`;
+            }
+            $.getJSON(fullUrl).then(json => {
+                const res = {};
+                if (json.status === 'OK') {
+                    res.loc = json.result.geometry.location;
+                    if (json.result.business_status === 'CLOSED_PERMANENTLY') {
+                        res.permclosed = true;
+                    } else if (json.result.business_status === 'CLOSED_TEMPORARILY') {
+                        res.tempclosed = true;
+                    }
+                    this._cacheLink(id, res);
+                } else if (json.status === 'NOT_FOUND') {
+                    res.notfound = true;
+                    this._cacheLink(id, res);
+                } else if (this._disableApiUntil) {
+                    res.apiDisabled = true;
+                } else {
+                    res.error = json.status;
+                    res.errorMessage = json.error_message;
+                    this._disableApiUntil = Date.now() + 10 * 1000; // Disable api calls for 10 seconds.
+                    console.error(`${GM_info.script.name}, Google Link Enhancer disabled for 10 seconds due to API error.`, res);
+                }
+                resolve(res);
+            });
+        });
     }
 
-    _onMapMouseenter(event) {
+    static _onMapMouseenter(event) {
         // If the point isn't destroyed yet, destroy it when mousing over the map.
         event.data._destroyPoint();
     }
 
-    _getSelectedFeatures() {
-        if (!W.selectionManager.getSelectedFeatures)
+    static _getSelectedFeatures() {
+        if (!W.selectionManager.getSelectedFeatures) {
             return W.selectionManager.selectedItems;
+        }
         return W.selectionManager.getSelectedFeatures();
     }
 
-    _formatLinkElements(a, b, c) {
-        let existingLinks = this._getExistingLinks();
-        var $links = $('#edit-panel').find(this.EXT_PROV_ELEM_QUERY);
+    _formatLinkElements() {
+        const existingLinks = GoogleLinkEnhancer._getExistingLinks();
+        const $links = $('#edit-panel').find(this.EXT_PROV_ELEM_QUERY);
         for (let ix = 0; ix < $links.length; ix++) {
-            var childEl = $links[ix];
-            //console.log('GLE fLE: ', childEl);
-            let $childEl = $(childEl);
-            let id = this._getIdFromElement($childEl);
-            //console.log('GLE fLE id: ' + id);
+            const childEl = $links[ix];
+            const $childEl = $(childEl);
+            let id = GoogleLinkEnhancer._getIdFromElement($childEl);
 
             // if its cid entry, look for the uuid match
-            if (id.indexOf("cid") == 0) {
+            if (id.indexOf('cid') === 0) {
                 Object.keys(existingLinks).forEach(id2 => {
-                    let elink = existingLinks[id2];
-                    if (elink.hasOwnProperty('url') && elink.url == id) {
+                    const elink = existingLinks[id2];
+                    if (elink.hasOwnProperty('url') && elink.url === id) {
                         id = id2;
-                        }
-                    });
+                    }
+                });
             }
-            let link = this._linkCache[id];
+            const link = this._linkCache[id];
             if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
                 setTimeout(() => {
-                    $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA500' }).attr({ 'title': this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count) });
+                    $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA500' }).attr({
+                        title: this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count)
+                    });
                 }, 50);
             }
             this._addHoverEvent($(childEl));
             if (link) {
                 if (link.permclosed && !this.DISABLE_CLOSED_PLACES) {
-                    // A delay is needed to allow the UI to do its formatting so it doesn't overwrite ours.
-                    // EDIT 2019.03.14 - Tested without the timeouts and it appears to be working now.
-
-                    //setTimeout(() => {
                     $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FAA' }).attr('title', this.strings.permClosedPlace);
-                    //}, 50);
                 } else if (link.tempclosed && !this.DISABLE_CLOSED_PLACES) {
-                    //setTimeout(() => {
                     $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA' }).attr('title', this.strings.tempClosedPlace);
-                    //}, 50);
                 } else if (link.notFound) {
-                    //setTimeout(() => {
                     $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
-                    //}, 50);
                 } else {
-                    let venue = this._getSelectedFeatures()[0].model;
+                    const venue = GoogleLinkEnhancer._getSelectedFeatures()[0].model;
                     if (this._isLinkTooFar(link, venue)) {
-                        //setTimeout(() => {
                         $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
-                        //}, 50);
-                    }
-                    else {  // reset in case we just deleted another provider
+                    } else { // reset in case we just deleted another provider
                         $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '' }).attr('title', '');
                     }
                 }
@@ -504,17 +475,17 @@ class GoogleLinkEnhancer {
         this._fmtWaiting = false;
     }
 
-    _getExistingLinks() {
-        let existingLinks = {};
+    static _getExistingLinks() {
+        const existingLinks = {};
         let thisVenue;
-        if (this._getSelectedFeatures().length) {
-            thisVenue = this._getSelectedFeatures()[0].model;
+        if (GoogleLinkEnhancer._getSelectedFeatures().length) {
+            thisVenue = GoogleLinkEnhancer._getSelectedFeatures()[0].model;
         }
         W.model.venues.getObjectArray().forEach(venue => {
-            let isThisVenue = venue === thisVenue;
-            let thisPlaceIDs = [];
+            const isThisVenue = venue === thisVenue;
+            const thisPlaceIDs = [];
             venue.attributes.externalProviderIDs.forEach(provID => {
-                let id = provID.attributes.uuid;
+                const id = provID.attributes.uuid;
                 if (thisPlaceIDs.indexOf(id) === -1) {
                     thisPlaceIDs.push(id);
                     let link = existingLinks[id];
@@ -525,7 +496,7 @@ class GoogleLinkEnhancer {
                         link = { count: 1, venues: [venue] };
                         existingLinks[id] = link;
                         if (provID.attributes.url != null) {
-                            var u = provID.attributes.url.replace('https://maps.google.com/?', '');
+                            const u = provID.attributes.url.replace('https://maps.google.com/?', '');
                             link.url = u;
                         }
                     }
@@ -549,16 +520,16 @@ class GoogleLinkEnhancer {
     // Add the POI point to the map.
     _addPoint(id) {
         if (!id) return;
-        let link = this._linkCache[id];
+        const link = this._linkCache[id];
         if (link) {
             if (!link.notFound) {
-                let coord = link.loc;
-                let poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
+                const coord = link.loc;
+                const poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
                 poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
-                let placeGeom = this._getSelectedFeatures()[0].geometry.getCentroid();
-                let placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
-                let ext = W.map.getExtent();
-                var lsBounds = new OpenLayers.Geometry.LineString([
+                const placeGeom = GoogleLinkEnhancer._getSelectedFeatures()[0].geometry.getCentroid();
+                const placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
+                const ext = W.map.getExtent();
+                const lsBounds = new OpenLayers.Geometry.LineString([
                     new OpenLayers.Geometry.Point(ext.left, ext.bottom),
                     new OpenLayers.Geometry.Point(ext.left, ext.top),
                     new OpenLayers.Geometry.Point(ext.right, ext.top),
@@ -567,7 +538,7 @@ class GoogleLinkEnhancer {
                 let lsLine = new OpenLayers.Geometry.LineString([placePt, poiPt]);
 
                 // If the line extends outside the bounds, split it so we don't draw a line across the world.
-                let splits = lsLine.splitWith(lsBounds);
+                const splits = lsLine.splitWith(lsBounds);
                 let label = '';
                 if (splits) {
                     let splitPoints;
@@ -578,7 +549,9 @@ class GoogleLinkEnhancer {
                     });
                     lsLine = new OpenLayers.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
                     let distance = poiPt.distanceTo(placePt);
-                    let unitConversion, unit1, unit2;
+                    let unitConversion;
+                    let unit1;
+                    let unit2;
                     if (W.model.isImperial) {
                         distance *= 3.28084;
                         unitConversion = 5280;
@@ -598,7 +571,7 @@ class GoogleLinkEnhancer {
                     }
                 }
 
-                this._destroyPoint();  // Just in case it still exists.
+                this._destroyPoint(); // Just in case it still exists.
                 this._ptFeature = new OpenLayers.Feature.Vector(poiPt, { poiCoord: true }, {
                     pointRadius: 6,
                     strokeWidth: 30,
@@ -610,11 +583,11 @@ class GoogleLinkEnhancer {
                     strokeWidth: 3,
                     strokeDashstyle: '12 8',
                     strokeColor: '#FF0',
-                    label: label,
+                    label,
                     labelYOffset: 45,
                     fontColor: '#FF0',
                     fontWeight: 'bold',
-                    labelOutlineColor: "#000",
+                    labelOutlineColor: '#000',
                     labelOutlineWidth: 4,
                     fontSize: '18'
                 });
@@ -638,16 +611,17 @@ class GoogleLinkEnhancer {
         this._timeoutID = setTimeout(() => this._destroyPoint(), 4000);
     }
 
-    _getIdFromElement($el) {
-        var id = "";
-        var $url = $el.find('a.url');
-        if ($url.length > 0)
+    static _getIdFromElement($el) {
+        let id = '';
+        const $url = $el.find('a.url');
+        if ($url.length > 0) {
             id = $url[0].href.replace('https://maps.google.com/?', '');
+        }
         return id;
     }
 
     _addHoverEvent($el) {
-        $el.hover(() => this._addPoint(this._getIdFromElement($el)), () => this._destroyPoint());
+        $el.hover(() => this._addPoint(GoogleLinkEnhancer._getIdFromElement($el)), () => this._destroyPoint());
     }
 
     _observeLinks() {
@@ -663,38 +637,39 @@ class GoogleLinkEnhancer {
 
         // The head element, where the Google Autocomplete code will insert a tag
         // for a javascript file.
-        var head = $('head')[0];
+        const head = $('head')[0];
         // The name of the method the Autocomplete code uses to insert the tag.
-        var method = 'appendChild';
+        const method = 'appendChild';
         // The method we will be overriding.
-        var originalMethod = head[method];
+        const originalMethod = head[method];
         this._originalHeadAppendChildMethod = originalMethod;
-        let that = this;
+        const that = this;
+        /* eslint-disable func-names, prefer-rest-params */ // Doesn't work as an arrow function (at least not without some modifications)
         head[method] = function () {
             // Check that the element is a javascript tag being inserted by Google.
             if (arguments[0] && arguments[0].src && arguments[0].src.match(/GetPredictions/)) {
                 // Regex to extract the name of the callback method that the JSONP will call.
-                var callbackMatchObject = (/callback=([^&]+)&|$/).exec(arguments[0].src);
+                const callbackMatchObject = (/callback=([^&]+)&|$/).exec(arguments[0].src);
 
                 // Regex to extract the search term that was entered by the user.
-                var searchTermMatchObject = (/\?1s([^&]+)&/).exec(arguments[0].src);
+                const searchTermMatchObject = (/\?1s([^&]+)&/).exec(arguments[0].src);
 
-                var searchTerm = unescape(searchTermMatchObject[1]);
+                // const searchTerm = unescape(searchTermMatchObject[1]);
                 if (callbackMatchObject && searchTermMatchObject) {
                     // The JSONP callback method is in the form "abc.def" and each time has a different random name.
-                    var names = callbackMatchObject[1].split('.');
+                    const names = callbackMatchObject[1].split('.');
                     // Store the original callback method.
-                    var originalCallback = names[0] && names[1] && window[names[0]] && window[names[0]][names[1]];
+                    const originalCallback = names[0] && names[1] && window[names[0]] && window[names[0]][names[1]];
 
                     if (originalCallback) {
-                        var newCallback = function () {  // Define your own JSONP callback
+                        const newCallback = function () { // Define your own JSONP callback
                             if (arguments[0] && arguments[0].predictions) {
                                 // SUCCESS!
 
                                 // The autocomplete results
-                                var data = arguments[0];
+                                const data = arguments[0];
 
-                                //console.log('GLE: ' + JSON.stringify(data));
+                                // console.log('GLE: ' + JSON.stringify(data));
                                 that._lastSearchResultPlaceIds = data.predictions.map(pred => pred.place_id);
 
                                 // Call the original callback so the WME dropdown can do its thing.
@@ -702,24 +677,26 @@ class GoogleLinkEnhancer {
                             }
                         };
 
-                        // Add copy all the attributes of the old callback function to the new callback function.
+                        // Add copy of all the attributes of the old callback function to the new callback function.
                         // This prevents the autocomplete functionality from throwing an error.
-                        for (let name in originalCallback) {
-                            newCallback[name] = originalCallback[name];
-                        }
-                        window[names[0]][names[1]] = newCallback;  // Override the JSONP callback
+                        Object.keys(originalCallback).forEach(key => {
+                            newCallback[key] = originalCallback[key];
+                        });
+                        window[names[0]][names[1]] = newCallback; // Override the JSONP callback
                     }
                 }
             }
             // Insert the element into the dom, regardless of whether it was being inserted by Google.
             return originalMethod.apply(this, arguments);
         };
+        /* eslint-enable func-names, prefer-rest-params */
     }
 
     _removeJsonpInterceptor() {
         $('head')[0].appendChild = this._originalHeadAppendChildMethod;
     }
 
+    /* eslint-disable */ // Disabling eslint since this is copied code.
     _initLZString() {
         // LZ Compressor
         // Copyright (c) 2013 Pieroxy <pieroxy@pieroxy.net>
@@ -728,15 +705,15 @@ class GoogleLinkEnhancer {
         // LZ-based compression algorithm, version 1.4.4
         this._LZString = (function () {
             // private property
-            var f = String.fromCharCode;
-            var keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-            var keyStrUriSafe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
-            var baseReverseDic = {};
+            const f = String.fromCharCode;
+            const keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+            const keyStrUriSafe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
+            const baseReverseDic = {};
 
             function getBaseValue(alphabet, character) {
                 if (!baseReverseDic[alphabet]) {
                     baseReverseDic[alphabet] = {};
-                    for (var i = 0; i < alphabet.length; i++) {
+                    for (let i = 0; i < alphabet.length; i++) {
                         baseReverseDic[alphabet][alphabet.charAt(i)] = i;
                     }
                 }
@@ -745,7 +722,7 @@ class GoogleLinkEnhancer {
             var LZString = {
                 compressToBase64: function (input) {
                     if (input === null) return "";
-                    var res = LZString._compress(input, 6, function (a) {
+                    const res = LZString._compress(input, 6, function (a) {
                         return keyStrBase64.charAt(a);
                     });
                     switch (res.length % 4) { // To produce valid Base64
@@ -788,7 +765,7 @@ class GoogleLinkEnhancer {
                 },
                 _compress: function (uncompressed, bitsPerChar, getCharFromInt) {
                     if (uncompressed === null) return "";
-                    var i, value,
+                    let i, value,
                         context_dictionary = {},
                         context_dictionaryToCreate = {},
                         context_c = "",
@@ -1000,7 +977,7 @@ class GoogleLinkEnhancer {
                     });
                 },
                 _decompress: function (length, resetValue, getNextValue) {
-                    var dictionary = [],
+                    let dictionary = [],
                         next,
                         enlargeIn = 4,
                         dictSize = 4,
@@ -1156,4 +1133,5 @@ class GoogleLinkEnhancer {
             return LZString;
         })();
     }
+    /* eslint-enable */
 }
