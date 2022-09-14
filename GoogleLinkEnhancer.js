@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2022.08.20.001
+// @version      2022.09.14.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -10,9 +10,7 @@
 
 /* global $ */
 /* global OpenLayers */
-/* global Promise */
 /* global W */
-/* global Node */
 /* global jQuery */
 /* global GM_info */
 
@@ -35,8 +33,6 @@ class GoogleLinkEnhancer {
         this._urlOrigin = window.location.origin;
         this._distanceLimit = 400; // Default distance (meters) when Waze place is flagged for being too far from Google place.
         // Area place is calculated as _distanceLimit + <distance between centroid and furthest node>
-        this._fmtCount = 0;
-        this._fmtWaiting = false;
 
         this._showTempClosedPOIs = true;
         this.strings = {};
@@ -99,14 +95,8 @@ class GoogleLinkEnhancer {
                     }
                 }
             });
-            this._fmtCount++;
-            // console.log('GLE fmt count: ' + this._fmtCount + " waiting: " + this._fmtWaiting.toString());
-            if (!this._fmtWaiting) {
-                setTimeout(() => {
-                    this._formatLinkElements();
-                }, 500);
-                this._fmtWaiting = true;
-            }
+
+            this._formatLinkElements();
         });
 
         // Watch for Google place search result list items being added to the DOM
@@ -333,14 +323,14 @@ class GoogleLinkEnhancer {
                     Promise.all(promises).then(results => {
                         let strokeColor = null;
                         let strokeDashStyle = 'solid';
-                        if (results.some(res => that._isLinkTooFar(res, venue))) {
-                            strokeColor = '#0FF';
-                        } else if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
+                        if (!that.DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
                             if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
                                 || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
                                 strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
                             }
                             strokeColor = '#F00';
+                        } else if (results.some(res => that._isLinkTooFar(res, venue))) {
+                            strokeColor = '#0FF';
                         } else if (!that.DISABLE_CLOSED_PLACES && that._showTempClosedPOIs && results.some(res => res.tempclosed)) {
                             if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name)
                                 || /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
@@ -429,50 +419,57 @@ class GoogleLinkEnhancer {
         return W.selectionManager.getSelectedFeatures();
     }
 
-    _formatLinkElements() {
-        const existingLinks = GoogleLinkEnhancer._getExistingLinks();
+    _formatLinkElements(callCount = 0) {
         const $links = $('#edit-panel').find(this.EXT_PROV_ELEM_QUERY);
-        for (let ix = 0; ix < $links.length; ix++) {
-            const childEl = $links[ix];
-            const $childEl = $(childEl);
-            let id = GoogleLinkEnhancer._getIdFromElement($childEl);
+        const selFeatures = W.selectionManager.getSelectedFeatures();
+        if (!$links.length) {
+            // If links aren't available, continue calling this function for up to 3 seconds unless place has been deselected.
+            if (callCount < 30 && selFeatures.length && selFeatures[0].model.type === 'venue') {
+                setTimeout(() => this._formatLinkElements(++callCount), 100);
+            }
+        } else {
+            const existingLinks = GoogleLinkEnhancer._getExistingLinks();
+            for (let ix = 0; ix < $links.length; ix++) {
+                const childEl = $links[ix];
+                const $childEl = $(childEl);
+                let id = GoogleLinkEnhancer._getIdFromElement($childEl);
 
-            // if its cid entry, look for the uuid match
-            if (id.indexOf('cid') === 0) {
-                Object.keys(existingLinks).forEach(id2 => {
-                    const elink = existingLinks[id2];
-                    if (elink.hasOwnProperty('url') && elink.url === id) {
-                        id = id2;
-                    }
-                });
-            }
-            const link = this._linkCache[id];
-            if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
-                setTimeout(() => {
-                    $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA500' }).attr({
-                        title: this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count)
+                // if its cid entry, look for the uuid match
+                if (id.indexOf('cid') === 0) {
+                    Object.keys(existingLinks).forEach(id2 => {
+                        const elink = existingLinks[id2];
+                        if (elink.hasOwnProperty('url') && elink.url === id) {
+                            id = id2;
+                        }
                     });
-                }, 50);
-            }
-            this._addHoverEvent($(childEl));
-            if (link) {
-                if (link.permclosed && !this.DISABLE_CLOSED_PLACES) {
-                    $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FAA' }).attr('title', this.strings.permClosedPlace);
-                } else if (link.tempclosed && !this.DISABLE_CLOSED_PLACES) {
-                    $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA' }).attr('title', this.strings.tempClosedPlace);
-                } else if (link.notFound) {
-                    $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
-                } else {
-                    const venue = GoogleLinkEnhancer._getSelectedFeatures()[0].model;
-                    if (this._isLinkTooFar(link, venue)) {
-                        $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
-                    } else { // reset in case we just deleted another provider
-                        $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '' }).attr('title', '');
+                }
+                const link = this._linkCache[id];
+                if (existingLinks[id] && existingLinks[id].count > 1 && existingLinks[id].isThisVenue) {
+                    setTimeout(() => {
+                        $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA500' }).attr({
+                            title: this.strings.linkedToXPlaces.replace('{0}', existingLinks[id].count)
+                        });
+                    }, 50);
+                }
+                this._addHoverEvent($(childEl));
+                if (link) {
+                    if (link.permclosed && !this.DISABLE_CLOSED_PLACES) {
+                        $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FAA' }).attr('title', this.strings.permClosedPlace);
+                    } else if (link.tempclosed && !this.DISABLE_CLOSED_PLACES) {
+                        $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#FFA' }).attr('title', this.strings.tempClosedPlace);
+                    } else if (link.notFound) {
+                        $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
+                    } else {
+                        const venue = GoogleLinkEnhancer._getSelectedFeatures()[0].model;
+                        if (this._isLinkTooFar(link, venue)) {
+                            $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
+                        } else { // reset in case we just deleted another provider
+                            $childEl.find(this.EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '' }).attr('title', '');
+                        }
                     }
                 }
             }
         }
-        this._fmtWaiting = false;
     }
 
     static _getExistingLinks() {
