@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2022.09.14.001
+// @version      2022.11.02.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -174,6 +174,7 @@ class GoogleLinkEnhancer {
     }
 
     enable() {
+        return; // TODO 2022-11-02 - remove this line when GLE issues are fixed.
         if (!this._enabled) {
             this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
             this._observeLinks();
