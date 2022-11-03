@@ -13,6 +13,7 @@
 /* global W */
 /* global jQuery */
 /* global GM_info */
+/* global google */
 
 // /* eslint-disable */
 /* eslint-disable no-unused-vars */
@@ -45,7 +46,8 @@ class GoogleLinkEnhancer {
         this.strings.badLink = 'Invalid Google link. Please remove it.';
         this.strings.tooFar = 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.';
 
-        this._urlBase = `${this._urlOrigin}/maps/api/place/details/json?fields=geometry,business_status&${this.DEC('YTJWNVBVRkplbUZUZVVObFltSkZVM0pYUlZKWk1VMVNXalUyWjBWQlpuQjBOM1JMTWxJMmFGWmZTUT09')}&`;
+        const attributionElem = document.createElement('div');
+        this._placesService = new google.maps.places.PlacesService(attributionElem);
 
         this._initLZString();
 
@@ -174,7 +176,6 @@ class GoogleLinkEnhancer {
     }
 
     enable() {
-        return; // TODO 2022-11-02 - remove this line when GLE issues are fixed.
         if (!this._enabled) {
             this._modeObserver.observe($('.edit-area #sidebarContent')[0], { childList: true, subtree: false });
             this._observeLinks();
@@ -364,42 +365,32 @@ class GoogleLinkEnhancer {
         // console.log('link cache count: ' + Object.keys(this._linkCache).length, this._linkCache);
     }
 
-    _getLinkInfoAsync(id) {
-        const link = this._linkCache[id];
-        if (link) {
-            return Promise.resolve(link);
-        }
-        if (this._disableApiUntil) {
-            if (Date.now() < this._disableApiUntil) {
-                return Promise.resolve({ apiDisabled: true });
-            }
-            this._disableApiUntil = null;
-        }
+    _getLinkInfoAsync(placeId) {
+        const request = {
+            placeId,
+            fields: ['geometry', 'business_status']
+        };
+        debugger;
         return new Promise(resolve => {
-            let fullUrl = this._urlBase;
-            if (id.startsWith('q=') || id.startsWith('cid=')) {
-                fullUrl += id;
-            } else {
-                fullUrl += `place_id=${id}`;
-            }
-            $.getJSON(fullUrl).then(json => {
+            this._placesService.getDetails(request, (place, requestStatus) => {
+                debugger;
                 const res = {};
-                if (json.status === 'OK') {
-                    res.loc = json.result.geometry.location;
-                    if (json.result.business_status === 'CLOSED_PERMANENTLY') {
+                if (requestStatus === google.maps.places.PlacesServiceStatus.OK) {
+                    res.loc = place.geometry.location;
+                    if (place.business_status === 'CLOSED_PERMANENTLY') {
                         res.permclosed = true;
-                    } else if (json.result.business_status === 'CLOSED_TEMPORARILY') {
+                    } else if (place.business_status === 'CLOSED_TEMPORARILY') {
                         res.tempclosed = true;
                     }
-                    this._cacheLink(id, res);
-                } else if (json.status === 'NOT_FOUND') {
+                    this._cacheLink(placeId, res);
+                } else if (requestStatus === google.maps.places.PlacesServiceStatus.NOT_FOUND) {
                     res.notfound = true;
-                    this._cacheLink(id, res);
+                    this._cacheLink(placeId, res);
                 } else if (this._disableApiUntil) {
                     res.apiDisabled = true;
                 } else {
-                    res.error = json.status;
-                    res.errorMessage = json.error_message;
+                    res.error = requestStatus;
+                    // res.errorMessage = json.error_message;
                     this._disableApiUntil = Date.now() + 10 * 1000; // Disable api calls for 10 seconds.
                     console.error(`${GM_info.script.name}, Google Link Enhancer disabled for 10 seconds due to API error.`, res);
                 }
@@ -407,6 +398,51 @@ class GoogleLinkEnhancer {
             });
         });
     }
+
+    // _getLinkInfoAsync(id) {
+    //     const link = this._linkCache[id];
+    //     if (link) {
+    //         return Promise.resolve(link);
+    //     }
+    //     if (this._disableApiUntil) {
+    //         if (Date.now() < this._disableApiUntil) {
+    //             return Promise.resolve({ apiDisabled: true });
+    //         }
+    //         this._disableApiUntil = null;
+    //     }
+    //     return new Promise(resolve => {
+
+    //         let fullUrl = this._urlBase;
+    //         if (id.startsWith('q=') || id.startsWith('cid=')) {
+    //             fullUrl += id;
+    //         } else {
+    //             fullUrl += `place_id=${id}`;
+    //         }
+    //         $.getJSON(fullUrl).then(json => {
+    //             const res = {};
+    //             if (json.status === 'OK') {
+    //                 res.loc = json.result.geometry.location;
+    //                 if (json.result.business_status === 'CLOSED_PERMANENTLY') {
+    //                     res.permclosed = true;
+    //                 } else if (json.result.business_status === 'CLOSED_TEMPORARILY') {
+    //                     res.tempclosed = true;
+    //                 }
+    //                 this._cacheLink(id, res);
+    //             } else if (json.status === 'NOT_FOUND') {
+    //                 res.notfound = true;
+    //                 this._cacheLink(id, res);
+    //             } else if (this._disableApiUntil) {
+    //                 res.apiDisabled = true;
+    //             } else {
+    //                 res.error = json.status;
+    //                 res.errorMessage = json.error_message;
+    //                 this._disableApiUntil = Date.now() + 10 * 1000; // Disable api calls for 10 seconds.
+    //                 console.error(`${GM_info.script.name}, Google Link Enhancer disabled for 10 seconds due to API error.`, res);
+    //             }
+    //             resolve(res);
+    //         });
+    //     });
+    // }
 
     static _onMapMouseenter(event) {
         // If the point isn't destroyed yet, destroy it when mousing over the map.
