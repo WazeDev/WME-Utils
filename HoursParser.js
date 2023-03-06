@@ -1,13 +1,11 @@
 // ==UserScript==
 // @name            WME Utils - HoursParser
 // @namespace       WazeDev
-// @version         2019.02.05.001
+// @version         2023.03.06.001
 // @description     Parses a text string into hours, for use in Waze Map Editor scripts
 // @author          MapOMatic (originally developed by bmtg)
 // @license         GNU GPLv3
 // ==/UserScript==
-
-/* global require */
 
 // eslint-disable-next-line no-unused-vars
 class HoursParser {
@@ -374,12 +372,12 @@ class HoursParser {
             for ( var ohix=0; ohix<hoursObjectArraySorted.length; ohix++ ) {
                 if ( hoursObjectArraySorted[ohix].days.length === 2 && hoursObjectArraySorted[ohix].days[0] === 0 && hoursObjectArraySorted[ohix].days[1] === 1) {
                     // separate hours
-                    hoursObjectArraySorted.push({days: [0], fromHour: hoursObjectArraySorted[ohix].fromHour, toHour: hoursObjectArraySorted[ohix].toHour});
+                    hoursObjectArraySorted.push(new this.OpeningHours({days: [0], fromHour: hoursObjectArraySorted[ohix].fromHour, toHour: hoursObjectArraySorted[ohix].toHour}));
                     hoursObjectArraySorted[ohix].days = [1];
                 }
             }
         }
-        returnVal.hours = hoursObjectArray;
+        returnVal.hours = hoursObjectArraySorted;
         return returnVal;
     }
 
