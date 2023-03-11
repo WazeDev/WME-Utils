@@ -522,7 +522,7 @@ class GoogleLinkEnhancer {
                         if (this.#isLinkTooFar(link, venue)) {
                             $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
                         } else { // reset in case we just deleted another provider
-                            $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0F0' }).attr('title', '');
+                            $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '' }).attr('title', '');
                         }
                     }
                 }
