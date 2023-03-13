@@ -160,6 +160,9 @@ class GoogleLinkEnhancer {
         if (selFeatures.length && selFeatures[0].model.type === 'venue') {
             this.#formatLinkElements();
         }
+
+        //DEBUG - delete me
+        setInterval(() => console.log(this.#extProviderProcessQueue.length), 3000);
     }
 
     get devMode() {
@@ -448,54 +451,58 @@ class GoogleLinkEnhancer {
         }
     }
 
-    // TODO: Create a queue for when processVenues is called multiple times before it finishes.
+    #extProviderProcessQueue = [];
+    #extProviderQueueInProcess = false;
     async #processVenues(venues = []) {
         this.#logDebug('processVenues');
         // this.#logDebug(GoogleLinkEnhancer.#getExistingLinks());
 
         // Collect extProviderIDs that aren't currently cached
-        const missingExtProviderIDs = [];
         venues.forEach(venue => {
             venue.attributes.externalProviderIDs.forEach(extProvider => {
                 const id = extProvider.attributes.uuid;
-                if (!this.#extProviderInfoCache.hasOwnProperty(id)) {
-                    missingExtProviderIDs.push(id);
+                if (!this.#extProviderInfoCache.hasOwnProperty(id) && !this.#extProviderProcessQueue.includes(id)) {
+                    this.#extProviderProcessQueue.push(id);
                 }
             });
         });
-        this.#logDebug(`Processing ${missingExtProviderIDs.length} IDs...`);
+        this.#logDebug(`Processing ${this.#extProviderProcessQueue.length} IDs...`);
 
-        while (missingExtProviderIDs.length) {
-            const dequeueCount = missingExtProviderIDs.length > 10 ? 10 : missingExtProviderIDs.length;
-            const batch = missingExtProviderIDs.splice(0, dequeueCount);
-            const newExtProviderInfos = [];
-            for (let i = 0; i < batch.length; i++) {
-                const id = batch[i];
-                newExtProviderInfos.push(this.#getExtProviderInfoAsync(id));
+        if (!this.#extProviderQueueInProcess) {
+            this.#extProviderQueueInProcess = true;
+            while (this.#extProviderProcessQueue.length) {
+                const dequeueCount = this.#extProviderProcessQueue.length > 10 ? 10 : this.#extProviderProcessQueue.length;
+                const batch = this.#extProviderProcessQueue.splice(0, dequeueCount);
+                const newExtProviderInfos = [];
+                for (let i = 0; i < batch.length; i++) {
+                    const id = batch[i];
+                    newExtProviderInfos.push(this.#fetchExtProviderInfo(id));
+                    // eslint-disable-next-line no-await-in-loop
+                    await new Promise(resolve => {
+                        setTimeout(() => resolve(), 125);
+                    });
+                }
+
                 // eslint-disable-next-line no-await-in-loop
-                await new Promise(resolve => {
-                    setTimeout(() => resolve(), 150);
-                });
+                await Promise.all(newExtProviderInfos);
+
+                /*
+                - On first run, venues added, venues synced, or venues changed, collect all extProviderIDs for the affected venues
+                - For each ID, check cache. If not there, add to queue to process.
+                - Process queue in batches of 10 per second.
+                - After each batch is processed, process ALL places and update the map.
+
+                - If venues are only removed, just process all places and update the map.
+                */
+
+                // Disabled until we can find a fix.
+                this.#updateMap();
+                this.#logDebug(`Processed ${dequeueCount} IDs`);
             }
-
-            // eslint-disable-next-line no-await-in-loop
-            await Promise.all(newExtProviderInfos);
-
-            /*
-            - On first run, venues added, venues synced, or venues changed, collect all extProviderIDs for the affected venues
-            - For each ID, check cache. If not there, add to queue to process.
-            - Process queue in batches of 10 per second.
-            - After each batch is processed, process ALL places and update the map.
-
-            - If venues are only removed, just process all places and update the map.
-            */
-
-            // Disabled until we can find a fix.
-            this.#updateMap();
-            this.#logDebug(`Processed ${dequeueCount} IDs`);
+            this.#extProviderQueueInProcess = false;
         }
 
-        if (!missingExtProviderIDs.length) this.#updateMap();
+        if (!this.#extProviderProcessQueue.length) this.#updateMap();
     }
 
     #cacheExtProviderInfo(id, link) {
@@ -504,7 +511,7 @@ class GoogleLinkEnhancer {
         // console.log('link cache count: ' + Object.keys(this.#linkCache).length, this.#linkCache);
     }
 
-    #getExtProviderInfoAsync(placeId) {
+    #fetchExtProviderInfo(placeId) {
         return new Promise(resolve => {
             let extProviderInfo = this.#extProviderInfoCache[placeId];
             if (!extProviderInfo) {
@@ -614,7 +621,7 @@ class GoogleLinkEnhancer {
                 const id = GoogleLinkEnhancer.#getIdFromElement($extProvElem);
                 if (!id) return;
 
-                promises.push(this.#getExtProviderInfoAsync(id));
+                promises.push(this.#fetchExtProviderInfo(id));
             });
             await Promise.all(promises);
 
@@ -766,7 +773,7 @@ class GoogleLinkEnhancer {
                 this.#timeoutDestroyPoint();
             }
         } else {
-            this.#getExtProviderInfoAsync(id).then(res => {
+            this.#fetchExtProviderInfo(id).then(res => {
                 if (res.error || res.apiDisabled) {
                     // API was temporarily disabled.  Ignore for now.
                 } else {
