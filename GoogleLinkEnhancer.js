@@ -514,7 +514,8 @@ class GoogleLinkEnhancer {
             if (!extProviderInfo) {
                 const request = {
                     placeId,
-                    fields: ['geometry', 'business_status']
+                    // added name and address_components to see if it fixes issue with WME displaying ID only in ext provider field
+                    fields: ['geometry', 'business_status', 'name', 'address_components']
                 };
                 this.#placesService.getDetails(request, (place, requestStatus) => {
                     extProviderInfo = {};
