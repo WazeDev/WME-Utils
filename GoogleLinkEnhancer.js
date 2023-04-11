@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2023.03.11.001
+// @version      2023.04.11.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -572,6 +572,13 @@ class GoogleLinkEnhancer {
         }
     }
 
+    // Borrowed from WazeWrap
+    static #calculateDistance(point1, point2) {
+        const line = new OpenLayers.Geometry.LineString([point1, point2]);
+        const length = line.getGeodesicLength(W.map.getProjectionObject());
+        return length; // multiply by 3.28084 to convert to feet
+    }
+
     // Add the POI point to the map.
     #addPoint(id) {
         if (!id) return;
@@ -603,7 +610,7 @@ class GoogleLinkEnhancer {
                         });
                     });
                     lsLine = new OpenLayers.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
-                    let distance = poiPt.distanceTo(placePt);
+                    let distance = GoogleLinkEnhancer.#calculateDistance(poiPt, placePt);
                     let unitConversion;
                     let unit1;
                     let unit2;
