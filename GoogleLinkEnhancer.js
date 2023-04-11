@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2023.04.11.001
+// @version      2023.04.11.002
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -260,8 +260,11 @@ class GoogleLinkEnhancer {
         // console.log('link cache count: ' + Object.keys(this.#linkCache).length, this.#linkCache);
     }
 
-    static #distanceBetweenPoints(x1, y1, x2, y2) {
-        return Math.sqrt(((x1 - x2) ** 2) + ((y1 - y2) ** 2));
+    // Borrowed from WazeWrap
+    static #distanceBetweenPoints(point1, point2) {
+        const line = new OpenLayers.Geometry.LineString([point1, point2]);
+        const length = line.getGeodesicLength(W.map.getProjectionObject());
+        return length; // multiply by 3.28084 to convert to feet
     }
 
     #isLinkTooFar(link, venue) {
@@ -269,17 +272,17 @@ class GoogleLinkEnhancer {
             const linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
             linkPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
             let venuePt;
-            let distanceLim;
+            let distanceLim = this.distanceLimit;
             if (venue.isPoint()) {
                 venuePt = venue.geometry.getCentroid();
-                distanceLim = this.distanceLimit;
             } else {
                 const bounds = venue.geometry.getBounds();
                 const center = bounds.getCenterLonLat();
-                venuePt = { x: center.lon, y: center.lat };
-                distanceLim = GoogleLinkEnhancer.#distanceBetweenPoints(center.lon, center.lat, bounds.right, bounds.top) + this.distanceLimit;
+                venuePt = new OpenLayers.Geometry.Point(center.lon, center.lat);
+                const topRightPt = new OpenLayers.Geometry.Point(bounds.right, bounds.top);
+                distanceLim += GoogleLinkEnhancer.#distanceBetweenPoints(venuePt, topRightPt);
             }
-            const distance = GoogleLinkEnhancer.#distanceBetweenPoints(linkPt.x, linkPt.y, venuePt.x, venuePt.y);
+            const distance = GoogleLinkEnhancer.#distanceBetweenPoints(linkPt, venuePt);
             return distance > distanceLim;
         }
         return false;
@@ -572,13 +575,6 @@ class GoogleLinkEnhancer {
         }
     }
 
-    // Borrowed from WazeWrap
-    static #calculateDistance(point1, point2) {
-        const line = new OpenLayers.Geometry.LineString([point1, point2]);
-        const length = line.getGeodesicLength(W.map.getProjectionObject());
-        return length; // multiply by 3.28084 to convert to feet
-    }
-
     // Add the POI point to the map.
     #addPoint(id) {
         if (!id) return;
@@ -610,7 +606,7 @@ class GoogleLinkEnhancer {
                         });
                     });
                     lsLine = new OpenLayers.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
-                    let distance = GoogleLinkEnhancer.#calculateDistance(poiPt, placePt);
+                    let distance = GoogleLinkEnhancer.#distanceBetweenPoints(poiPt, placePt);
                     let unitConversion;
                     let unit1;
                     let unit2;
