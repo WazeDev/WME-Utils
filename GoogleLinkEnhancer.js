@@ -166,6 +166,12 @@ class GoogleLinkEnhancer {
         }
     }
 
+    static #getSelectedVenues() {
+        return W.selectionManager.getSelectedFeatures()
+            .map(feature => feature.attributes.repositoryObject)
+            .filter(repoObj => repoObj?.type === 'venue');
+    }
+
     #initLayer() {
         this.#mapLayer = new OpenLayers.Layer.Vector('Google Link Enhancements.', {
             uniqueName: '___GoogleLinkEnhancements',
@@ -467,19 +473,12 @@ class GoogleLinkEnhancer {
         event.data.#destroyPoint();
     }
 
-    static #getSelectedFeatures() {
-        if (!W.selectionManager.getSelectedFeatures) {
-            return W.selectionManager.selectedItems;
-        }
-        return W.selectionManager.getSelectedFeatures();
-    }
-
     async #formatLinkElements(callCount = 0) {
         const $links = $('#edit-panel').find(this.#EXT_PROV_ELEM_QUERY);
-        const selFeatures = W.selectionManager.getSelectedFeatures();
+        const venues = GoogleLinkEnhancer.#getSelectedVenues();
         if (!$links.length) {
             // If links aren't available, continue calling this function for up to 3 seconds unless place has been deselected.
-            if (callCount < 30 && selFeatures.length && selFeatures[0].model.type === 'venue') {
+            if (callCount < 30 && venues.length === 1) {
                 setTimeout(() => this.#formatLinkElements(++callCount), 100);
             }
         } else {
@@ -521,7 +520,7 @@ class GoogleLinkEnhancer {
                     } else if (link.notFound) {
                         $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
                     } else {
-                        const venue = GoogleLinkEnhancer.#getSelectedFeatures()[0].model;
+                        const venue = GoogleLinkEnhancer.#getSelectedVenues()[0];
                         if (this.#isLinkTooFar(link, venue)) {
                             $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
                         } else { // reset in case we just deleted another provider
@@ -536,9 +535,7 @@ class GoogleLinkEnhancer {
     static #getExistingLinks() {
         const existingLinks = {};
         let thisVenue;
-        if (GoogleLinkEnhancer.#getSelectedFeatures().length) {
-            thisVenue = GoogleLinkEnhancer.#getSelectedFeatures()[0].model;
-        }
+        thisVenue = GoogleLinkEnhancer.#getSelectedVenues()[0];
         W.model.venues.getObjectArray().forEach(venue => {
             const isThisVenue = venue === thisVenue;
             const thisPlaceIDs = [];
