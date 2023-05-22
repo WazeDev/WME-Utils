@@ -323,6 +323,7 @@ class GoogleLinkEnhancer {
     }
 
     #cleanAndSaveLinkCache() {
+        this.#logDebug('cleanAndSaveLinkCache');
         if (!this.#extProviderInfoCache) return;
         const now = new Date();
         Object.keys(this.#extProviderInfoCache).forEach(id => {
@@ -467,6 +468,12 @@ class GoogleLinkEnhancer {
 
         if (!this.#extProviderQueueInProcess) {
             this.#extProviderQueueInProcess = true;
+            if (!document.querySelector('#gle-queue-count')) {
+                $('#drawer > .drawer-separator').after(
+                    $('<div id="gle-queue-count" style="text-align: center;">').text(this.#extProviderProcessQueue.length)
+                );
+            }
+
             while (this.#extProviderProcessQueue.length) {
                 const dequeueCount = this.#extProviderProcessQueue.length > 10 ? 10 : this.#extProviderProcessQueue.length;
                 const batch = this.#extProviderProcessQueue.splice(0, dequeueCount);
@@ -495,6 +502,8 @@ class GoogleLinkEnhancer {
                 // Disabled until we can find a fix.
                 this.#updateMap();
                 this.#logDebug(`Processed ${dequeueCount} IDs`);
+                $('#gle-queue-count').text(this.#extProviderProcessQueue.length);
+                setTimeout(() => {}, 0);
             }
             this.#extProviderQueueInProcess = false;
         }
