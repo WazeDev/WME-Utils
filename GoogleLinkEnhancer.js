@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2023.05.22.001
+// @version      2023.07.27.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -160,8 +160,8 @@ class GoogleLinkEnhancer {
         /* eslint-enable wrap-iife, func-names, object-shorthand */
 
         // In case a place is already selected on load.
-        const selFeatures = W.selectionManager.getSelectedFeatures();
-        if (selFeatures.length && selFeatures[0].attributes.repositoryObject.type === 'venue') {
+        const selObjects = W.selectionManager.getSelectedDataModelObjects();
+        if (selObjects.length && selObjects[0].type === 'venue') {
             this.#formatLinkElements();
         }
     }
@@ -469,10 +469,10 @@ class GoogleLinkEnhancer {
 
     async #formatLinkElements(callCount = 0) {
         const $links = $('#edit-panel').find(this.#EXT_PROV_ELEM_QUERY);
-        const selFeatures = W.selectionManager.getSelectedFeatures();
+        const selObjects = W.selectionManager.getSelectedDataModelObjects();
         if (!$links.length) {
             // If links aren't available, continue calling this function for up to 3 seconds unless place has been deselected.
-            if (callCount < 30 && selFeatures.length && selFeatures[0].attributes.repositoryObject.type === 'venue') {
+            if (callCount < 30 && selObjects.length && selObjects[0].type === 'venue') {
                 setTimeout(() => this.#formatLinkElements(++callCount), 100);
             }
         } else {
@@ -514,7 +514,7 @@ class GoogleLinkEnhancer {
                     } else if (link.notFound) {
                         $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#F0F' }).attr('title', this.strings.badLink);
                     } else {
-                        const venue = W.selectionManager.getSelectedFeatures()[0].attributes.repositoryObject;
+                        const venue = W.selectionManager.getSelectedDataModelObjects()[0];
                         if (this.#isLinkTooFar(link, venue)) {
                             $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit));
                         } else { // reset in case we just deleted another provider
@@ -528,10 +528,7 @@ class GoogleLinkEnhancer {
 
     static #getExistingLinks() {
         const existingLinks = {};
-        let thisVenue;
-        if (W.selectionManager.getSelectedFeatures().length) {
-            thisVenue = W.selectionManager.getSelectedFeatures()[0].attributes.repositoryObject;
-        }
+        const thisVenue = W.selectionManager.getSelectedDataModelObjects()[0];
         W.model.venues.getObjectArray().forEach(venue => {
             const isThisVenue = venue === thisVenue;
             const thisPlaceIDs = [];
@@ -577,7 +574,7 @@ class GoogleLinkEnhancer {
                 const coord = link.loc;
                 const poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
                 poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject().projCode);
-                const placeGeom = W.selectionManager.getSelectedFeatures()[0].geometry.getCentroid();
+                const placeGeom = W.selectionManager.getSelectedDataModelObjects()[0].geometry.getCentroid();
                 const placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
                 const ext = W.map.getExtent();
                 const lsBounds = new OpenLayers.Geometry.LineString([
@@ -664,7 +661,7 @@ class GoogleLinkEnhancer {
 
     static #getIdFromElement($el) {
         const providerIndex = $el.parent().children().toArray().indexOf($el[0]);
-        return W.selectionManager.getSelectedFeatures()[0].attributes.repositoryObject.getExternalProviderIDs()[providerIndex]?.attributes.uuid;
+        return W.selectionManager.getSelectedDataModelObjects()[0].getExternalProviderIDs()[providerIndex]?.attributes.uuid;
     }
 
     #addHoverEvent($el) {
