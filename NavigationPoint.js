@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            WME Utils - NavigationPoint
 // @namespace       WazeDev
-// @version         2018.02.13.001
+// @version         2023.12.05.01
 // @description     NavigationPoint class necessary for creating an entryExitPoint in code.  Instantiate the class and pass the OL.Geometry.Point in the constructor then add the NavigationPoint object to the entryExitPoints array.
 // @author          JustinS83
 // @license         GNU GPLv3
@@ -10,7 +10,7 @@
 class NavigationPoint
     {
         constructor(point){
-            this._point = point.clone();
+            this._point = JSON.parse(JSON.stringify(point));
             this._entry = true;
             this._exit = true;
             this._isPrimary = true;
@@ -25,7 +25,7 @@ class NavigationPoint
         }
 
         getPoint(){
-            return this._point.clone();
+            return JSON.parse(JSON.stringify(this._point));
         }
 
         getEntry(){
