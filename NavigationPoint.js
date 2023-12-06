@@ -10,7 +10,7 @@
 class NavigationPoint
     {
         constructor(point){
-            this._point = JSON.parse(JSON.stringify(point));
+            this._point = structuredClone(point);
             this._entry = true;
             this._exit = true;
             this._isPrimary = true;
@@ -25,7 +25,7 @@ class NavigationPoint
         }
 
         getPoint(){
-            return JSON.parse(JSON.stringify(this._point));
+            return structuredClone(this._point);
         }
 
         getEntry(){
