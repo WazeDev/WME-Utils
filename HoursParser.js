@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            WME Utils - HoursParser
 // @namespace       WazeDev
-// @version         2023.03.06.001
+// @version         2024.06.16.000
 // @description     Parses a text string into hours, for use in Waze Map Editor scripts
 // @author          MapOMatic (originally developed by bmtg)
 // @license         GNU GPLv3
@@ -81,7 +81,7 @@ class HoursParser {
         inputHoursParse = inputHoursParse.replace(/\-{2,}/g, "-");  // replace any duplicate dashes
 
         // kill extra words
-        let killWords = 'paste|here|business|operation|times|time|walk-ins|walk ins|welcome|dinner|lunch|brunch|breakfast|regular|weekday|weekend|opening|open|now|from|hours|hour|our|are|and|&'.split("|");
+        let killWords = 'paste|here|business|day of the week|days of the week|operation|times|time|walk-ins|walk ins|welcome|dinner|lunch|brunch|breakfast|regular|weekday|weekend|opening|open|now|from|hours|hour|our|are|and|&'.split("|");
             // Remove timezone abbreviations. See https://en.wikipedia.org/wiki/List_of_time_zone_abbreviations
         killWords.push('acdt','acst','act','act','acwst','adt','aedt','aest','aft','akdt','akst','amst','amt','amt','art','ast','ast','awst','azost','azot','azt','bdt','biot','bit','bot','brst','brt','bst','bst','bst','btt','cat','cct','cdt','cdt','cest','cet','chadt','chast','chot','chost','chst','chut','cist','cit','ckt','clst','clt','cost','cot','cst','cst','cst','ct','cvt','cwst','cxt','davt','ddut','dft','easst','east','eat','ect','ect','edt','eest','eet','egst','egt','eit','est','fet','fjt','fkst','fkt','fnt','galt','gamt','get','gft','gilt','git','gmt','gst','gst','gyt','hdt','haec','hst','hkt','hmt','hovst','hovt','ict','idlw','idt','iot','irdt','irkt','irst','ist','ist','ist','jst','kalt','kgt','kost','krat','kst','lhst','lhst','lint','magt','mart','mawt','mdt','met','mest','mht','mist','mit','mmt','msk','mst','mst','mut','mvt','myt','nct','ndt','nft','npt','nst','nt','nut','nzdt','nzst','omst','orat','pdt','pet','pett','pgt','phot','pht','pkt','pmdt','pmst','pont','pst','pst','pyst','pyt','ret','rott','sakt','samt','sast','sbt','sct','sdt','sgt','slst','sret','srt','sst','sst','syot','taht','tha','tft','tjt','tkt','tlt','tmt','trt','tot','tvt','ulast','ulat','utc','uyst','uyt','uzt','vet','vlat','volt','vost','vut','wakt','wast','wat','west','wet','wit','wst','yakt','yekt');
         for (twix=0; twix<killWords.length; twix++) {
