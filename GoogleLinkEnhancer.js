@@ -288,89 +288,91 @@ class GoogleLinkEnhancer {
         return false;
     }
 
+    // eslint-disable-next-line class-methods-use-this
     #processPlaces() {
-        return; // Disabled until we can find a fix.
-        try {
-            if (this.#enabled) {
-                const that = this;
-                // Get a list of already-linked id's
-                const existingLinks = GoogleLinkEnhancer.#getExistingLinks();
-                this.#mapLayer.removeAllFeatures();
-                const drawnLinks = [];
-                W.model.venues.getObjectArray().forEach(venue => {
-                    const promises = [];
-                    venue.attributes.externalProviderIDs.forEach(provID => {
-                        const id = provID.attributes.uuid;
+        // Disabled until we can find a fix.
 
-                        // Check for duplicate links
-                        const linkInfo = existingLinks[id];
-                        if (linkInfo.count > 1) {
-                            const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                            const width = venue.isPoint() ? '4' : '12';
-                            const color = '#fb8d00';
-                            const features = [new OpenLayers.Feature.Vector(geometry, {
-                                strokeWidth: width, strokeColor: color
-                            })];
-                            const lineStart = geometry.getCentroid();
-                            linkInfo.venues.forEach(linkVenue => {
-                                if (linkVenue !== venue
-                                    && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
-                                    features.push(
-                                        new OpenLayers.Feature.Vector(
-                                            new OpenLayers.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
-                                            {
-                                                strokeWidth: 4,
-                                                strokeColor: color,
-                                                strokeDashstyle: '12 12'
-                                            }
-                                        )
-                                    );
-                                    drawnLinks.push([venue, linkVenue]);
-                                }
-                            });
-                            that.#mapLayer.addFeatures(features);
-                        }
+        // try {
+        //     if (this.#enabled) {
+        //         const that = this;
+        //         // Get a list of already-linked id's
+        //         const existingLinks = GoogleLinkEnhancer.#getExistingLinks();
+        //         this.#mapLayer.removeAllFeatures();
+        //         const drawnLinks = [];
+        //         W.model.venues.getObjectArray().forEach(venue => {
+        //             const promises = [];
+        //             venue.attributes.externalProviderIDs.forEach(provID => {
+        //                 const id = provID.attributes.uuid;
 
-                        // Get Google link info, and store results for processing.
-                        promises.push(that.#getLinkInfoAsync(id));
-                    });
+        //                 // Check for duplicate links
+        //                 const linkInfo = existingLinks[id];
+        //                 if (linkInfo.count > 1) {
+        //                     const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+        //                     const width = venue.isPoint() ? '4' : '12';
+        //                     const color = '#fb8d00';
+        //                     const features = [new OpenLayers.Feature.Vector(geometry, {
+        //                         strokeWidth: width, strokeColor: color
+        //                     })];
+        //                     const lineStart = geometry.getCentroid();
+        //                     linkInfo.venues.forEach(linkVenue => {
+        //                         if (linkVenue !== venue
+        //                             && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
+        //                             features.push(
+        //                                 new OpenLayers.Feature.Vector(
+        //                                     new OpenLayers.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
+        //                                     {
+        //                                         strokeWidth: 4,
+        //                                         strokeColor: color,
+        //                                         strokeDashstyle: '12 12'
+        //                                     }
+        //                                 )
+        //                             );
+        //                             drawnLinks.push([venue, linkVenue]);
+        //                         }
+        //                     });
+        //                     that.#mapLayer.addFeatures(features);
+        //                 }
 
-                    // Process all results of link lookups and add a highlight feature if needed.
-                    Promise.all(promises).then(results => {
-                        let strokeColor = null;
-                        let strokeDashStyle = 'solid';
-                        if (!that.#DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
-                            if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
-                                || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
-                                strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
-                            }
-                            strokeColor = '#F00';
-                        } else if (results.some(res => that.#isLinkTooFar(res, venue))) {
-                            strokeColor = '#0FF';
-                        } else if (!that.#DISABLE_CLOSED_PLACES && that.#showTempClosedPOIs && results.some(res => res.tempclosed)) {
-                            if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name)
-                                || /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
-                                strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
-                            }
-                            strokeColor = '#FD3';
-                        } else if (results.some(res => res.notFound)) {
-                            strokeColor = '#F0F';
-                        }
-                        if (strokeColor) {
-                            const style = {
-                                strokeWidth: venue.isPoint() ? '4' : '12',
-                                strokeColor,
-                                strokeDashStyle
-                            };
-                            const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                            that.#mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, style)]);
-                        }
-                    });
-                });
-            }
-        } catch (ex) {
-            console.error('PIE (Google Link Enhancer) error:', ex);
-        }
+        //                 // Get Google link info, and store results for processing.
+        //                 promises.push(that.#getLinkInfoAsync(id));
+        //             });
+
+        //             // Process all results of link lookups and add a highlight feature if needed.
+        //             Promise.all(promises).then(results => {
+        //                 let strokeColor = null;
+        //                 let strokeDashStyle = 'solid';
+        //                 if (!that.#DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
+        //                     if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
+        //                         || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
+        //                         strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
+        //                     }
+        //                     strokeColor = '#F00';
+        //                 } else if (results.some(res => that.#isLinkTooFar(res, venue))) {
+        //                     strokeColor = '#0FF';
+        //                 } else if (!that.#DISABLE_CLOSED_PLACES && that.#showTempClosedPOIs && results.some(res => res.tempclosed)) {
+        //                     if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name)
+        //                         || /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
+        //                         strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
+        //                     }
+        //                     strokeColor = '#FD3';
+        //                 } else if (results.some(res => res.notFound)) {
+        //                     strokeColor = '#F0F';
+        //                 }
+        //                 if (strokeColor) {
+        //                     const style = {
+        //                         strokeWidth: venue.isPoint() ? '4' : '12',
+        //                         strokeColor,
+        //                         strokeDashStyle
+        //                     };
+        //                     const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+        //                     that.#mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, style)]);
+        //                 }
+        //             });
+        //         });
+        //     }
+        // } catch (ex) {
+        //     console.error('PIE (Google Link Enhancer) error:', ex);
+        // }
     }
 
     #cacheLink(id, link) {
