@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2023.07.27.001
+// @version      2024.08.18.000
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -567,6 +567,15 @@ class GoogleLinkEnhancer {
         }
     }
 
+    static #getOLMapExtent() {
+        let extent = W.map.getExtent();
+        if (Array.isArray(extent)) {
+            extent = new OpenLayers.Bounds(extent);
+            extent.transform('EPSG:4326', 'EPSG:3857');
+        }
+        return extent;
+    }
+
     // Add the POI point to the map.
     #addPoint(id) {
         if (!id) return;
@@ -578,7 +587,7 @@ class GoogleLinkEnhancer {
                 poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject().projCode);
                 const placeGeom = W.selectionManager.getSelectedDataModelObjects()[0].geometry.getCentroid();
                 const placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
-                const ext = W.map.getExtent();
+                const ext = GoogleLinkEnhancer.#getOLMapExtent();
                 const lsBounds = new OpenLayers.Geometry.LineString([
                     new OpenLayers.Geometry.Point(ext.left, ext.bottom),
                     new OpenLayers.Geometry.Point(ext.left, ext.top),
