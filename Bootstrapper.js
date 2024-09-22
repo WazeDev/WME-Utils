@@ -2,7 +2,7 @@
 // @name         WME Utils - Bootstrap
 // @namespace    WazeDev
 // @version      2024.09.22.000
-// @description  Adds a bootstrap function for easier startup of WME, WazeWrap, and ScriptUpdateMonitor.
+// @description  Adds a bootstrap function for easier startup of wmeSdk, WazeWrap, and ScriptUpdateMonitor.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
 // @license      GNU GPLv3
