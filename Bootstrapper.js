@@ -68,13 +68,13 @@ var bootstrap = (function() {
         await window.SDK_INITIALIZED;
         await wmeReady(args.scriptName, args.scriptId);
         if (args.useWazeWrap) await wazeWrapReady(args);
-        if (args.useScriptUpdateMonitor) {
+        if (args.scriptUpdateMonitor) {
             loadScriptUpdateMonitor(
                 args.scriptName,
-                args.scriptVersion,
-                args.downloadUrl,
-                args.metaUrl,
-                args.metaRegExp
+                args.scriptUpdateMonitor.scriptVersion,
+                args.scriptUpdateMonitor.downloadUrl,
+                args.scriptUpdateMonitor.metaUrl,
+                args.scriptUpdateMonitor.metaRegExp
             );
         }
         args.callback(wmeSdk);
