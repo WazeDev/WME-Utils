@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Bootstrap
 // @namespace    WazeDev
-// @version      2024.09.27.001
+// @version      2024.10.05.000
 // @description  Adds a bootstrap function for easier startup of wmeSdk, WazeWrap, and ScriptUpdateMonitor.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -43,32 +43,37 @@ var bootstrap = (function() {
         });
     }
 
-    function loadScriptUpdateMonitor(scriptName, scriptVersion, downloadUrl, metaUrl, metaRegExp) {
+    function loadScriptUpdateMonitor(args) {
         let updateMonitor;
         try {
-            if (!GM_xmlhttpRequest) {
-                throw new Error('GM_xmlhttpRequest is required for WazeWrap.Alerts.ScriptUpdateMonitor');
+            if (typeof GM_xmlhttpRequest === 'undefined') {
+                throw new Error('GM_xmlhttpRequest is required to use WazeWrap.Alerts.ScriptUpdateMonitor');
             }
-            updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(scriptName, scriptVersion, downloadUrl, GM_xmlhttpRequest, metaUrl, metaRegExp);
+            updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(
+                args.scriptName,
+                args.scriptUpdateMonitor.scriptVersion,
+                args.scriptUpdateMonitor.downloadUrl,
+                GM_xmlhttpRequest,
+                args.scriptUpdateMonitor.metaUrl,
+                args.scriptUpdateMonitor.metaRegExp
+            );
             updateMonitor.start();
         } catch (ex) {
             // Report, but don't stop if ScriptUpdateMonitor fails.
-            console.error(`${scriptName}:`, ex);
+            console.error(`${args.scriptName}:`, ex);
         }
     }
 
     async function bootstrapFunc(args) {
+        args = { ...args };
+        args.scriptName ||= GM_info.script.name;
+        args.scriptId ||= GM_info.script.name.replaceAll(' ', '');
         await SDK_INITIALIZED;
         await wmeReady(args.scriptName, args.scriptId);
         if (args.useWazeWrap || args.scriptUpdateMonitor) await wazeWrapReady(args);
         if (args.scriptUpdateMonitor) {
-            loadScriptUpdateMonitor(
-                args.scriptName,
-                args.scriptUpdateMonitor.scriptVersion,
-                args.scriptUpdateMonitor.downloadUrl,
-                args.scriptUpdateMonitor.metaUrl,
-                args.scriptUpdateMonitor.metaRegExp
-            );
+            args.scriptUpdateMonitor.scriptVersion ||= GM_info.script.version;
+            loadScriptUpdateMonitor(args);
         }
         return wmeSdk;
     }
