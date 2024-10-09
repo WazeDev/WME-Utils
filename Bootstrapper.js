@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Bootstrap
 // @namespace    WazeDev
-// @version      2024.10.05.002
+// @version      2024.10.09.000
 // @description  Adds a bootstrap function for easier startup of wmeSdk, WazeWrap, and ScriptUpdateMonitor.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -25,7 +25,7 @@ var bootstrap = (function() {
         wmeSdk = getWmeSdk({ scriptName, scriptId });
         return new Promise(resolve => {
             if (wmeSdk.State.isReady()) resolve();
-            wmeSdk.Events.once('wme-ready').then(resolve);
+            wmeSdk.Events.once({ eventName: 'wme-ready' }).then(resolve);
         });
     }
 
