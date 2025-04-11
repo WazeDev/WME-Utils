@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2025.04.10.000
+// @version      2025.04.11.000
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -143,7 +143,10 @@ const GoogleLinkEnhancer = (function() {
         #onWmeSelectionChanged() {
             if (this.#enabled) {
                 this.#destroyPoint();
-                this.#formatLinkElements();
+                const selected = W.selectionManager.getSelectedDataModelObjects();
+                if (selected[0]?.type === 'venue') {
+                    this.#formatLinkElements();
+                }
             }
         }
 
