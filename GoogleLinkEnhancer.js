@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2025.04.11.000
+// @version      2025.04.11.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -513,10 +513,10 @@ const GoogleLinkEnhancer = (function() {
             const originalGetDetails = google.maps.places.PlacesService.prototype.getDetails;
             const that = this;
             google.maps.places.PlacesService.prototype.getDetails = function interceptedGetDetails(request, callback) {
-                console.log('Intercepted getDetails call:', request);
+                console.debug('Intercepted getDetails call:', request);
 
                 const customCallback = function(result, status) {
-                    console.log('Intercepted getDetails response:', result, status);
+                    console.debug('Intercepted getDetails response:', result, status);
                     const link = {};
                     switch (status) {
                         case google.maps.places.PlacesServiceStatus.OK: {
@@ -543,7 +543,7 @@ const GoogleLinkEnhancer = (function() {
                 return originalGetDetails.call(this, request, customCallback);
             };
 
-            console.log('Google Maps PlacesService.getDetails intercepted successfully.');
+            console.debug('Google Maps PlacesService.getDetails intercepted successfully.');
         }
     }
 
