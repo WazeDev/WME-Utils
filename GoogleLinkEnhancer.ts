@@ -266,11 +266,10 @@ const GoogleLinkEnhancer = ((() => {
         }
 
         // Borrowed from WazeWrap
-        static #distanceBetweenPoints(point1, point2) {
+        static #distanceBetweenPoints(point1: GeoJSON.Point | GeoJSON.Polygon, point2: GeoJSON.Point | GeoJSON.Polygon) {
             // const line = new OpenLayers.Geometry.LineString([point1, point2]);
             // const length = line.getGeodesicLength(W.map.getProjectionObject());
 
-            
             const length = turf.length(turf.geometryCollection([point1, point2]));
             return length; // multiply by 3.28084 to convert to feet
         }
@@ -462,10 +461,13 @@ const GoogleLinkEnhancer = ((() => {
                         } else {
                             // const venue = W.selectionManager.getSelectedDataModelObjects()[0];
                             const selection = this.sdk.Editing.getSelection();
-                            if (this.#isLinkTooFar(link, venue)) {
-                                $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit.toString()));
-                            } else { // reset in case we just deleted another provider
-                                $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '' }).attr('title', '');
+                            if(selection?.objectType === "venue") {
+                                const venue = this.sdk.DataModel.Venues.getById({venueId: selection.ids[0]});
+                                if (venue && this.#isLinkTooFar(link, venue)) {
+                                    $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '#0FF' }).attr('title', this.strings.tooFar.replace('{0}', this.distanceLimit.toString()));
+                                } else { // reset in case we just deleted another provider
+                                    $extProvElem.find(this.#EXT_PROV_ELEM_CONTENT_QUERY).css({ backgroundColor: '' }).attr('title', '');
+                                }
                             }
                         }
                     }
@@ -541,9 +543,15 @@ const GoogleLinkEnhancer = ((() => {
                     // const poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
                     const poiPt = turf.point([coord.lng, coord.lat]);
                     poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject().projCode);
-                    const placeGeom = W.selectionManager.getSelectedDataModelObjects()[0].geometry.getCentroid();
+                    // const placeGeom = W.selectionManager.getSelectedDataModelObjects()[0].geometry.getCentroid();
+                    const selection = this.sdk.Editing.getSelection();
+                    let placeGeom: GeoJSON.Geometry | undefined;
+                    if(selection?.objectType === "venue") {
+                        const v = this.sdk.DataModel.Venues.getById({venueId: selection.ids[0]});
+                        placeGeom = v?.geometry && turf.centroid(v?.geometry)?.geometry;
+                    }
                     // const placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
-                    const placePt = turf.point([placeGeom.x, placeGeom.y]);
+                    const placePt = turf.point(placeGeom);
                     const ext = GLE.#getOLMapExtent(this.sdk);
                     // const lsBounds = new OpenLayers.Geometry.LineString([
                     //     new OpenLayers.Geometry.Point(ext.left, ext.bottom),
