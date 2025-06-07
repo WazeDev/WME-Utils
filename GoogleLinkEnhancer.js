@@ -5,6 +5,7 @@
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
+// @require      https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js
 // @license      GNU GPLv3
 // ==/UserScript==
 
@@ -15,7 +16,10 @@
 /* eslint-disable max-classes-per-file */
 
 // eslint-disable-next-line func-names
-const GoogleLinkEnhancer = (function() {
+// import * as turf from "@turf/turf";
+// import { WmeSDK } from "wme-sdk-typings";
+
+const GoogleLinkEnhancer = ((() => {
     'use strict';
 
     class GooglePlaceCache {
@@ -87,23 +91,83 @@ const GoogleLinkEnhancer = (function() {
             tooFar: 'The Google linked place is more than {0} meters from the Waze place.  Please verify the link is correct.'
         };
 
+        #styleConfig = {
+            styleContext: {
+                highNodeColor: (context) => {
+                    return context?.feature?.properties?.style?.strokeColor;
+                },
+                strokeColor: (context) => {
+                    return context?.feature?.properties?.style?.strokeColor;
+                },
+                strokeWidth: (context) => {
+                    return context?.feature?.properties?.style?.strokeWidth;
+                },
+                strokeDashStyle: (context) => {
+                    return context?.feature?.properties?.style?.strokeDashstyle;
+                },
+            },
+            styleRules: [
+                {
+                    predicate: (properties) => { return properties.styleName === "lineStyle"; },
+                    style: {
+                        strokeColor: "${strokeColor}",
+                    },
+                },
+                {
+                    predicate: (properties) => { return properties.styleName === "default"; },
+                    style: {
+                        strokeColor: '${strokeColor}',
+                        strokeWidth: '${strokeWidth}',
+                        strokeDashstyle: '${strokeDashstyle}',
+                        pointRadius: 15,
+                        fillOpacity: 0
+                    }
+                },
+                {
+                    predicate: (properties) => { return properties.styleName === "venueStyle"; },
+                    style: {
+                        strokeColor: '${strokeColor}',
+                        strokeWidth: '${strokeWidth}',
+                    }
+                },
+                {
+                    predicate: (properties) => { return properties.styleName === "placeStyle"; },
+                    style: {
+                        strokeColor: '${strokeColor}',
+                        strokeWidth: '${strokeWidth}',
+                        strokeDashStyle: "${strokeDashStyle}"
+                    }
+                }
+            ],
+        };
+
+
         /* eslint-enable no-unused-vars */
-        constructor() {
+        constructor(sdk = undefined) {
+            if(!sdk) {
+                const msg = "SDK Must be defined to use GLE";
+                console.error(msg);
+                throw new Error(msg);
+            }
+            this.sdk = sdk;
             this.linkCache = new GooglePlaceCache();
             this.#initLayer();
 
             // NOTE: Arrow functions are necessary for calling methods on object instances.
             // This could be made more efficient by only processing the relevant places.
             W.model.events.register('mergeend', null, () => { this.#processPlaces(); });
-            W.model.venues.on('objectschanged', () => { this.#processPlaces(); });
-            W.model.venues.on('objectsremoved', () => { this.#processPlaces(); });
-            W.model.venues.on('objectsadded', () => { this.#processPlaces(); });
+            // W.model.venues.on('objectschanged', () => { this.#processPlaces(); });
+            // W.model.venues.on('objectsremoved', () => { this.#processPlaces(); });
+            // W.model.venues.on('objectsadded', () => { this.#processPlaces(); });
+            this.sdk.Events.on({eventName:"wme-data-model-objects-added", eventHandler: () => { this.#processPlaces();}});
+            this.sdk.Events.on({eventName:"wme-data-model-objects-removed", eventHandler: () => { this.#processPlaces();}});
+            this.sdk.Events.on({eventName:"wme-data-model-objects-changed", eventHandler: () => { this.#processPlaces();}});
 
             // This is a special event that will be triggered when DOM elements are destroyed.
             /* eslint-disable wrap-iife, func-names, object-shorthand */
-            (function($) {
+            (($) => {
                 $.event.special.destroyed = {
-                    remove: function(o) {
+                    remove: (o) => {
                         if (o.handler && o.type !== 'destroyed') {
                             o.handler();
                         }
@@ -113,38 +177,45 @@ const GoogleLinkEnhancer = (function() {
             /* eslint-enable wrap-iife, func-names, object-shorthand */
 
             // In case a place is already selected on load.
-            const selObjects = W.selectionManager.getSelectedDataModelObjects();
-            if (selObjects.length && selObjects[0].type === 'venue') {
+            /**
+             * @type Selection
+             */
+            const currentSelection = this.sdk.Editing.getSelection();
+            // const selObjects = W.selectionManager.getSelectedDataModelObjects();
+            if (currentSelection?.ids?.length && currentSelection.objectType === 'venue') {
                 this.#formatLinkElements();
             }
 
-            W.selectionManager.events.register('selectionchanged', null, this.#onWmeSelectionChanged.bind(this));
+            this.sdk.Events.on({eventName: "wme-selection-changed", eventHandler: this.#onWmeSelectionChanged.bind(this)});
+            // W.selectionManager.events.register('selectionchanged', null, this.#onWmeSelectionChanged.bind(this));
         }
 
         #initLayer() {
-            this.#mapLayer = new OpenLayers.Layer.Vector('Google Link Enhancements.', {
-                uniqueName: '___GoogleLinkEnhancements',
-                displayInLayerSwitcher: true,
-                styleMap: new OpenLayers.StyleMap({
-                    default: {
-                        strokeColor: '${strokeColor}',
-                        strokeWidth: '${strokeWidth}',
-                        strokeDashstyle: '${strokeDashstyle}',
-                        pointRadius: '15',
-                        fillOpacity: '0'
-                    }
-                })
-            });
+            // this.#mapLayer = new OpenLayers.Layer.Vector('Google Link Enhancements.', {
+            //     uniqueName: '___GoogleLinkEnhancements',
+            //     displayInLayerSwitcher: true,
+            //     styleMap: new OpenLayers.StyleMap({
+            //         default: {
+            //             strokeColor: '${strokeColor}',
+            //             strokeWidth: '${strokeWidth}',
+            //             strokeDashstyle: '${strokeDashstyle}',
+            //             pointRadius: '15',
+            //             fillOpacity: '0'
+            //         }
+            //     })
+            // });
 
-            this.#mapLayer.setOpacity(0.8);
-            W.map.addLayer(this.#mapLayer);
+            // this.#mapLayer.setOpacity(0.8);
+            // W.map.addLayer(this.#mapLayer);
+            this.sdk.Map.addLayer({layerName: "Google Link Enhancements.", styleContext: this.#styleConfig.styleContext, styleRules: this.#styleConfig.styleRules});
         }
 
         #onWmeSelectionChanged() {
             if (this.#enabled) {
                 this.#destroyPoint();
-                const selected = W.selectionManager.getSelectedDataModelObjects();
-                if (selected[0]?.type === 'venue') {
+                // const selected = W.selectionManager.getSelectedDataModelObjects();
+                const selected = this.sdk.Editing.getSelection();
+                if (selected.objectType === 'venue') {
                     // The setTimeout is necessary (in beta WME currently, at least) to allow the
                     // panel UI DOM to update after a place is selected.
                     setTimeout(() => this.#formatLinkElements(), 0);
@@ -157,7 +228,8 @@ const GoogleLinkEnhancer = (function() {
                 this.#interceptPlacesService();
                 // Note: Using on() allows passing "this" as a variable, so it can be used in the handler function.
                 $('#map').on('mouseenter', null, this, GLE.#onMapMouseenter);
-                W.model.venues.on('objectschanged', this.#formatLinkElements, this);
+                // W.model.venues.on('objectschanged', this.#formatLinkElements, this);
+                this.sdk.Events.on({eventName: "wme-data-model-objects-changed", eventHandler: (change) => {this.#formatLinkElements().bind(this)}});
                 this.#processPlaces();
                 this.#enabled = true;
             }
@@ -166,7 +238,9 @@ const GoogleLinkEnhancer = (function() {
         disable() {
             if (this.#enabled) {
                 $('#map').off('mouseenter', GLE.#onMapMouseenter);
-                W.model.venues.off('objectschanged', this.#formatLinkElements, this);
+                // W.model.venues.off('objectschanged', this.#formatLinkElements, this);
+                this.sdk.Events.on({eventName: "wme-data-model-objects-changed", eventHandler: (change) => {this.#formatLinkElements().bind(this)}});
+
                 this.#enabled = false;
             }
         }
@@ -191,24 +265,34 @@ const GoogleLinkEnhancer = (function() {
 
         // Borrowed from WazeWrap
         static #distanceBetweenPoints(point1, point2) {
-            const line = new OpenLayers.Geometry.LineString([point1, point2]);
-            const length = line.getGeodesicLength(W.map.getProjectionObject());
+            // const line = new OpenLayers.Geometry.LineString([point1, point2]);
+            // const length = line.getGeodesicLength(W.map.getProjectionObject());
+
+            
+            const length = turf.length(turf.geometryCollection([point1, point2]));
             return length; // multiply by 3.28084 to convert to feet
         }
-
+        static #isPointVenue(venue) {
+            return venue.geometry.type === "Point"
+        }
         #isLinkTooFar(link, venue) {
             if (link.loc) {
-                const linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
-                linkPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
+                // const linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
+                const linkPt = turf.point([link.loc.lng, link.loc.lat]);
+                // linkPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
                 let venuePt;
                 let distanceLim = this.distanceLimit;
-                if (venue.isPoint()) {
-                    venuePt = venue.geometry.getCentroid();
+                // if (venue.isPoint()) {
+                if(venue.geometry.type === "Point") {
+                    venuePt = venue.geometry;
                 } else {
-                    const bounds = venue.geometry.getBounds();
-                    const center = bounds.getCenterLonLat();
-                    venuePt = new OpenLayers.Geometry.Point(center.lon, center.lat);
-                    const topRightPt = new OpenLayers.Geometry.Point(bounds.right, bounds.top);
+                    // const bounds = venue.geometry.getBounds();
+                    // const center = bounds.getCenterLonLat();
+                    const center = turf.centroid(venue.geometry);
+                    // venuePt = new OpenLayers.Geometry.Point(center.lon, center.lat);
+                    // const topRightPt = new OpenLayers.Geometry.Point(bounds.right, bounds.top);
+                    venuePt = center;
+                    const topRightPt = turf.point(venue.geometry.bbox[0], venue.geometry.bbox[1]);
                     distanceLim += GLE.#distanceBetweenPoints(venuePt, topRightPt);
                 }
                 const distance = GLE.#distanceBetweenPoints(linkPt, venuePt);
@@ -220,59 +304,84 @@ const GoogleLinkEnhancer = (function() {
         #processPlaces() {
             if (this.#enabled) {
                 try {
-                    const that = this;
                     // Get a list of already-linked id's
-                    const existingLinks = GoogleLinkEnhancer.#getExistingLinks();
+                    const existingLinks = GoogleLinkEnhancer.#getExistingLinks(this.sdk);
                     this.#mapLayer.removeAllFeatures();
                     const drawnLinks = [];
-                    W.model.venues.getObjectArray().forEach(venue => {
+                    for(const venue of this.sdk.DataModel.Venues.getAll()) {
+                    // W.model.venues.getObjectArray().forEach(venue => {
                         const promises = [];
-                        venue.attributes.externalProviderIDs.forEach(provID => {
+                        // venue.attributes.externalProviderIDs.forEach(provID => {
+                        for(const provID of venue.externalProviderIds) {
                             const id = provID.attributes.uuid;
 
                             // Check for duplicate links
                             const linkInfo = existingLinks[id];
                             if (linkInfo.count > 1) {
-                                const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                                const width = venue.isPoint() ? '4' : '12';
+                                // const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                                const geometry = venue.geometry;
+                                // const width = venue.isPoint() ? '4' : '12';
+                                const width = GLE.#isPointVenue(venue) ? 4 : 12;
                                 const color = '#fb8d00';
-                                const features = [new OpenLayers.Feature.Vector(geometry, {
-                                    strokeWidth: width, strokeColor: color
-                                })];
+                                // const features = [new OpenLayers.Feature.Vector(geometry, {
+                                //     strokeWidth: width, strokeColor: color
+                                // })];
+                                const features = [
+                                    GLE.#isPointVenue(venue) ? turf.point(geometry, {
+                                        styleName: "venueStyle",
+                                        style: {
+                                            strokeWidth: width,
+                                            strokeColor: color
+                                        }
+                                    }) : turf.polygon(geometry, {
+                                        styleName: "venueStyle",
+                                        style: {
+                                            strokeColor: color,
+                                            strokeWidth: width
+                                        }
+                                    })
+                                ]
                                 const lineStart = geometry.getCentroid();
-                                linkInfo.venues.forEach(linkVenue => {
+                                // linkInfo.venues.forEach(linkVenue => {
+                                for(const linkVenue of linkInfo.venues) {
                                     if (linkVenue !== venue
                                         && !drawnLinks.some(dl => (dl[0] === venue && dl[1] === linkVenue) || (dl[0] === linkVenue && dl[1] === venue))) {
+                                        const endPoint = turf.centroid(linkVenue.geometry);
                                         features.push(
-                                            new OpenLayers.Feature.Vector(
-                                                new OpenLayers.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
-                                                {
-                                                    strokeWidth: 4,
-                                                    strokeColor: color,
-                                                    strokeDashstyle: '12 12'
-                                                }
-                                            )
+                                            // new OpenLayers.Feature.Vector(
+                                            //     new OpenLayers.Geometry.LineString([lineStart, linkVenue.geometry.getCentroid()]),
+                                            //     {
+                                            //         strokeWidth: 4,
+                                            //         strokeColor: color,
+                                            //         strokeDashstyle: '12 12'
+                                            //     }
+                                            // )
+                                            turf.lineString([lineStart, endPoint], {styleName: "lineStyle", style: {                                    
+                                                strokeWidth: 4,
+                                                strokeColor: color,
+                                                strokeDashstyle: '12 12'
+                                            }})
                                         );
                                         drawnLinks.push([venue, linkVenue]);
                                     }
-                                });
-                                that.#mapLayer.addFeatures(features);
+                                };
+                                this.#mapLayer.addFeatures(features);
                             }
-                        });
+                        };
 
                         // Process all results of link lookups and add a highlight feature if needed.
                         Promise.all(promises).then(results => {
                             let strokeColor = null;
                             let strokeDashStyle = 'solid';
-                            if (!that.#DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
+                            if (!this.#DISABLE_CLOSED_PLACES && results.some(res => res.permclosed)) {
                                 if (/^(\[|\()?(permanently )?closed(\]|\)| -)/i.test(venue.attributes.name)
                                     || /(\(|- |\[)(permanently )?closed(\)|\])?$/i.test(venue.attributes.name)) {
-                                    strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
+                                    strokeDashStyle = GLE.#isPointVenue(venue) ? '2 6' : '2 16';
                                 }
                                 strokeColor = '#F00';
-                            } else if (results.some(res => that.#isLinkTooFar(res, venue))) {
+                            } else if (results.some(res => this.#isLinkTooFar(res, venue))) {
                                 strokeColor = '#0FF';
-                            } else if (!that.#DISABLE_CLOSED_PLACES && that.#showTempClosedPOIs && results.some(res => res.tempclosed)) {
+                            } else if (!this.#DISABLE_CLOSED_PLACES && this.#showTempClosedPOIs && results.some(res => res.tempclosed)) {
                                 if (/^(\[|\()?(temporarily )?closed(\]|\)| -)/i.test(venue.attributes.name)
                                     || /(\(|- |\[)(temporarily )?closed(\)|\])?$/i.test(venue.attributes.name)) {
                                     strokeDashStyle = venue.isPoint() ? '2 6' : '2 16';
@@ -283,15 +392,22 @@ const GoogleLinkEnhancer = (function() {
                             }
                             if (strokeColor) {
                                 const style = {
-                                    strokeWidth: venue.isPoint() ? '4' : '12',
+                                    strokeWidth: GLE.#isPointVenue(venue) ? 4 : 12,
                                     strokeColor,
                                     strokeDashStyle
                                 };
-                                const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                                that.#mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, style)]);
+                                // const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
+                                const feature = GLE.#isPointVenue(venue) ? turf.point(venue.geometry, {
+                                    styleName: "placeStyle",
+                                    style: style
+                                }) : this.polygon(venue.geometry, {
+                                    styleName: "placeStyle",
+                                    style: style
+                                });
+                                // this.#mapLayer.addFeatures([new OpenLayers.Feature.Vector(geometry, style)]);
                             }
                         });
-                    });
+                    };
                 } catch (ex) {
                     console.error('PIE (Google Link Enhancer) error:', ex);
                 }
@@ -306,7 +422,7 @@ const GoogleLinkEnhancer = (function() {
         async #formatLinkElements() {
             const $links = $('#edit-panel').find(this.#EXT_PROV_ELEM_QUERY);
             if ($links.length) {
-                const existingLinks = GLE.#getExistingLinks();
+                const existingLinks = GLE.#getExistingLinks(this.sdk);
 
                 // fetch all links first
                 const promises = [];
@@ -354,14 +470,23 @@ const GoogleLinkEnhancer = (function() {
             }
         }
 
-        static #getExistingLinks() {
+        static #getExistingLinks(sdk = undefined) {
+            if(!sdk) {
+                const msg = "SDK Is Not Available";
+                console.error(msg);
+                throw new Error(msg);
+            }
             const existingLinks = {};
-            const thisVenue = W.selectionManager.getSelectedDataModelObjects()[0];
-            W.model.venues.getObjectArray().forEach(venue => {
+            // const thisVenue = W.selectionManager.getSelectedDataModelObjects()[0];
+            const thisVenue = sdk.Editing.getSelection()
+            // W.model.venues.getObjectArray().forEach(venue => {
+            for(const venue of sdk.DataModel.Venues.getAll()) {
                 const isThisVenue = venue === thisVenue;
                 const thisPlaceIDs = [];
-                venue.attributes.externalProviderIDs.forEach(provID => {
-                    const id = provID.attributes.uuid;
+                // venue.attributes.externalProviderIDs.forEach(provID => {
+                for(const provID of venue.externalProviderIds) {
+                    // const id = provID.attributes.uuid;
+                    const id = provID;
                     if (!thisPlaceIDs.includes(id)) {
                         thisPlaceIDs.push(id);
                         let link = existingLinks[id];
@@ -378,8 +503,8 @@ const GoogleLinkEnhancer = (function() {
                         }
                         link.isThisVenue = link.isThisVenue || isThisVenue;
                     }
-                });
-            });
+                };
+            };
             return existingLinks;
         }
 
@@ -393,13 +518,13 @@ const GoogleLinkEnhancer = (function() {
             }
         }
 
-        static #getOLMapExtent() {
-            let extent = W.map.getExtent();
-            if (Array.isArray(extent)) {
-                extent = new OpenLayers.Bounds(extent);
-                extent.transform('EPSG:4326', 'EPSG:3857');
-            }
-            return extent;
+        static #getOLMapExtent(sdk) {
+            // let extent = W.map.getExtent();
+            // if (Array.isArray(extent)) {
+            //     extent = new OpenLayers.Bounds(extent);
+            //     extent.transform('EPSG:4326', 'EPSG:3857');
+            // }
+            return sdk.Map.getMapExtent();
         }
 
         // Add the POI point to the map.
@@ -409,17 +534,26 @@ const GoogleLinkEnhancer = (function() {
             if (link) {
                 if (!link.notFound) {
                     const coord = link.loc;
-                    const poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
+                    // const poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
+                    const poiPt = turf.point([coord.lng, coord.lat]);
                     poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject().projCode);
                     const placeGeom = W.selectionManager.getSelectedDataModelObjects()[0].geometry.getCentroid();
-                    const placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
-                    const ext = GLE.#getOLMapExtent();
-                    const lsBounds = new OpenLayers.Geometry.LineString([
-                        new OpenLayers.Geometry.Point(ext.left, ext.bottom),
-                        new OpenLayers.Geometry.Point(ext.left, ext.top),
-                        new OpenLayers.Geometry.Point(ext.right, ext.top),
-                        new OpenLayers.Geometry.Point(ext.right, ext.bottom),
-                        new OpenLayers.Geometry.Point(ext.left, ext.bottom)]);
+                    // const placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
+                    const placePt = turf.point([placeGeom.x, placeGeom.y]);
+                    const ext = GLE.#getOLMapExtent(this.sdk);
+                    // const lsBounds = new OpenLayers.Geometry.LineString([
+                    //     new OpenLayers.Geometry.Point(ext.left, ext.bottom),
+                    //     new OpenLayers.Geometry.Point(ext.left, ext.top),
+                    //     new OpenLayers.Geometry.Point(ext.right, ext.top),
+                    //     new OpenLayers.Geometry.Point(ext.right, ext.bottom),
+                    //     new OpenLayers.Geometry.Point(ext.left, ext.bottom)]);
+                    const lsBounds = turf.lineString([
+                        [ext[0], ext[3]],
+                        [ext[0], ext[1]],
+                        [ext[2], ext[1]],
+                        [ext[2], ext[3]],
+                        [ext[0], ext[3]],
+                    ])
                     let lsLine = new OpenLayers.Geometry.LineString([placePt, poiPt]);
 
                     // If the line extends outside the bounds, split it so we don't draw a line across the world.
@@ -427,17 +561,18 @@ const GoogleLinkEnhancer = (function() {
                     let label = '';
                     if (splits) {
                         let splitPoints;
-                        splits.forEach(split => {
-                            split.components.forEach(component => {
+                        for(const split of splits) {
+                            for(const component of split.components) {
                                 if (component.x === placePt.x && component.y === placePt.y) splitPoints = split;
-                            });
-                        });
+                            };
+                        };
                         lsLine = new OpenLayers.Geometry.LineString([splitPoints.components[0], splitPoints.components[1]]);
                         let distance = GLE.#distanceBetweenPoints(poiPt, placePt);
                         let unitConversion;
                         let unit1;
                         let unit2;
-                        if (W.model.isImperial) {
+                        // if (W.model.isImperial) {
+                        if(this.sdk.Settings.getUserSettings().isImperial) {
                             distance *= 3.28084;
                             unitConversion = 5280;
                             unit1 = ' ft';
@@ -517,7 +652,7 @@ const GoogleLinkEnhancer = (function() {
             google.maps.places.PlacesService.prototype.getDetails = function interceptedGetDetails(request, callback) {
                 console.debug('Intercepted getDetails call:', request);
 
-                const customCallback = function(result, status) {
+                const customCallback = (result, status) => {
                     console.debug('Intercepted getDetails response:', result, status);
                     const link = {};
                     switch (status) {
@@ -550,4 +685,4 @@ const GoogleLinkEnhancer = (function() {
     }
 
     return GLE;
-}());
+})());
