@@ -55,6 +55,7 @@ const GoogleLinkEnhancer = ((() => {
             }
         }
     }
+    ;
     class GLE {
         #DISABLE_CLOSED_PLACES = false; // Set to TRUE if the feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
         #EXT_PROV_ELEM_QUERY = 'wz-list-item.external-provider';
@@ -190,6 +191,7 @@ const GoogleLinkEnhancer = ((() => {
             // this.#mapLayer.setOpacity(0.8);
             // W.map.addLayer(this.#mapLayer);
             this.sdk.Map.addLayer({ layerName: _a.#mapLayer, styleContext: this.#styleConfig.styleContext, styleRules: this.#styleConfig.styleRules });
+            this.sdk.Map.setLayerOpacity({ layerName: _a.#mapLayer, opacity: 0.8 });
         }
         #onWmeSelectionChanged() {
             if (this.#enabled) {
@@ -284,10 +286,10 @@ const GoogleLinkEnhancer = ((() => {
                         const promises = [];
                         // venue.attributes.externalProviderIDs.forEach(provID => {
                         for (const provID of venue.externalProviderIds) {
-                            const id = provID.attributes.uuid;
+                            const id = provID;
                             // Check for duplicate links
                             const linkInfo = existingLinks[id];
-                            if (linkInfo.count > 1) {
+                            if (linkInfo?.count > 1) {
                                 // const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
                                 const geometry = venue.geometry;
                                 // const width = venue.isPoint() ? '4' : '12';
@@ -326,7 +328,7 @@ const GoogleLinkEnhancer = ((() => {
                                         //         strokeDashstyle: '12 12'
                                         //     }
                                         // )
-                                        turf.lineString([lineStart, endPoint], { styleName: "lineStyle", style: {
+                                        turf.lineString([lineStart.geometry.coordinates, endPoint.geometry.coordinates], { styleName: "lineStyle", style: {
                                                 strokeWidth: 4,
                                                 strokeColor: color,
                                                 strokeDashstyle: '12 12'
@@ -335,7 +337,8 @@ const GoogleLinkEnhancer = ((() => {
                                     }
                                 }
                                 ;
-                                this.#mapLayer.addFeatures(features);
+                                this.sdk.Map.addFeaturesToLayer({ features: features, layerName: _a.#mapLayer });
+                                // this.#mapLayer.addFeatures(features);
                             }
                         }
                         ;
@@ -475,10 +478,10 @@ const GoogleLinkEnhancer = ((() => {
                         else {
                             link = { count: 1, venues: [venue] };
                             existingLinks[id] = link;
-                            if (provID.attributes.url != null) {
-                                const u = provID.attributes.url.replace('https://maps.google.com/?', '');
-                                link.url = u;
-                            }
+                            // if (provID.attributes.url != null) {
+                            //     const u = provID.attributes.url.replace('https://maps.google.com/?', '');
+                            //     link.url = u;
+                            // }
                         }
                         link.isThisVenue = link.isThisVenue || isThisVenue;
                     }

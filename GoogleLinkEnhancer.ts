@@ -65,7 +65,13 @@ const GoogleLinkEnhancer = ((() => {
             }
         }
     }
+
+    interface LinkInfo {
+        count: number,
+        venues: Venue[],
+    };
     class GLE {
+
         #DISABLE_CLOSED_PLACES = false; // Set to TRUE if the feature needs to be temporarily disabled, e.g. during the COVID-19 pandemic.
         #EXT_PROV_ELEM_QUERY = 'wz-list-item.external-provider';
         #EXT_PROV_ELEM_EDIT_QUERY = 'wz-list-item.external-provider-edit';
@@ -210,6 +216,7 @@ const GoogleLinkEnhancer = ((() => {
             // this.#mapLayer.setOpacity(0.8);
             // W.map.addLayer(this.#mapLayer);
             this.sdk.Map.addLayer({layerName: GLE.#mapLayer, styleContext: this.#styleConfig.styleContext, styleRules: this.#styleConfig.styleRules});
+            this.sdk.Map.setLayerOpacity({layerName: GLE.#mapLayer, opacity: 0.8});
         }
 
         #onWmeSelectionChanged() {
@@ -314,11 +321,11 @@ const GoogleLinkEnhancer = ((() => {
                         const promises = [];
                         // venue.attributes.externalProviderIDs.forEach(provID => {
                         for(const provID of venue.externalProviderIds) {
-                            const id = provID.attributes.uuid;
+                            const id = provID;
 
                             // Check for duplicate links
                             const linkInfo = existingLinks[id];
-                            if (linkInfo.count > 1) {
+                            if (linkInfo?.count > 1) {
                                 // const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
                                 const geometry: GeoJSON.Point | GeoJSON.Polygon = venue.geometry;
                                 // const width = venue.isPoint() ? '4' : '12';
@@ -327,7 +334,7 @@ const GoogleLinkEnhancer = ((() => {
                                 // const features = [new OpenLayers.Feature.Vector(geometry, {
                                 //     strokeWidth: width, strokeColor: color
                                 // })];
-                                const features = [
+                                const features: GeoJSON.Feature[] = [
                                     GLE.isPointVenue(venue) ? turf.point(geometry.coordinates, {
                                         styleName: "venueStyle",
                                         style: {
@@ -357,7 +364,7 @@ const GoogleLinkEnhancer = ((() => {
                                             //         strokeDashstyle: '12 12'
                                             //     }
                                             // )
-                                            turf.lineString([lineStart, endPoint], {styleName: "lineStyle", style: {                                    
+                                            turf.lineString([lineStart.geometry.coordinates, endPoint.geometry.coordinates], {styleName: "lineStyle", style: {                                    
                                                 strokeWidth: 4,
                                                 strokeColor: color,
                                                 strokeDashstyle: '12 12'
@@ -366,7 +373,8 @@ const GoogleLinkEnhancer = ((() => {
                                         drawnLinks.push([venue, linkVenue]);
                                     }
                                 };
-                                this.#mapLayer.addFeatures(features);
+                                this.sdk.Map.addFeaturesToLayer({features: features, layerName: GLE.#mapLayer})
+                                // this.#mapLayer.addFeatures(features);
                             }
                         };
 
@@ -481,7 +489,7 @@ const GoogleLinkEnhancer = ((() => {
                 console.error(msg);
                 throw new Error(msg);
             }
-            const existingLinks = {};
+            const existingLinks: Record<string, LinkInfo> = {};
             // const thisVenue = W.selectionManager.getSelectedDataModelObjects()[0];
             const thisVenue = sdk.Editing.getSelection()
             if(thisVenue?.objectType !== "venue") return {};
@@ -495,17 +503,17 @@ const GoogleLinkEnhancer = ((() => {
                     const id = provID;
                     if (!thisPlaceIDs.includes(id)) {
                         thisPlaceIDs.push(id);
-                        let link = existingLinks[id];
+                        let link: LinkInfo = existingLinks[id];
                         if (link) {
                             link.count++;
                             link.venues.push(venue);
                         } else {
                             link = { count: 1, venues: [venue] };
                             existingLinks[id] = link;
-                            if (provID.attributes.url != null) {
-                                const u = provID.attributes.url.replace('https://maps.google.com/?', '');
-                                link.url = u;
-                            }
+                            // if (provID.attributes.url != null) {
+                            //     const u = provID.attributes.url.replace('https://maps.google.com/?', '');
+                            //     link.url = u;
+                            // }
                         }
                         link.isThisVenue = link.isThisVenue || isThisVenue;
                     }
