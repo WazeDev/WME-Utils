@@ -269,7 +269,7 @@ const GoogleLinkEnhancer = ((() => {
                     const topRightPt = turf.point(venue.geometry.bbox[0], venue.geometry.bbox[1]);
                     distanceLim += _a.#distanceBetweenPoints(venuePt, topRightPt);
                 }
-                const distance = _a.#distanceBetweenPoints(linkPt, venuePt);
+                const distance = _a.#distanceBetweenPoints(linkPt.geometry, venuePt);
                 return distance > distanceLim;
             }
             return false;
