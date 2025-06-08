@@ -69,6 +69,7 @@ const GoogleLinkEnhancer = ((() => {
     interface LinkInfo {
         count: number,
         venues: Venue[],
+        isThisVenue: boolean,
     };
     class GLE {
 
