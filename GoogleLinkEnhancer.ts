@@ -69,7 +69,6 @@ const GoogleLinkEnhancer = ((() => {
     interface LinkInfo {
         count: number,
         venues: Venue[],
-        isThisVenue: boolean,
     };
     class GLE {
 
@@ -304,7 +303,7 @@ const GoogleLinkEnhancer = ((() => {
                     const topRightPt = turf.point(venue.geometry.bbox[0], venue.geometry.bbox[1]);
                     distanceLim += GLE.#distanceBetweenPoints(venuePt, topRightPt);
                 }
-                const distance = GLE.#distanceBetweenPoints(linkPt.geometry, venuePt);
+                const distance = GLE.#distanceBetweenPoints(linkPt, venuePt);
                 return distance > distanceLim;
             }
             return false;
