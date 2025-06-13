@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2025.04.11.002
+// @version      2025.06.13.001
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       MapOMatic, WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -266,8 +266,12 @@ const GoogleLinkEnhancer = ((() => {
                     // venuePt = new OpenLayers.Geometry.Point(center.lon, center.lat);
                     // const topRightPt = new OpenLayers.Geometry.Point(bounds.right, bounds.top);
                     venuePt = center.geometry;
-                    const topRightPt = turf.point(venue.geometry.bbox[0], venue.geometry.bbox[1]);
-                    distanceLim += _a.#distanceBetweenPoints(venuePt, topRightPt);
+                    let bbox = venue.geometry.bbox;
+                    if (!bbox) {
+                        bbox = turf.bbox(venue.geometry);
+                    }
+                    const topRightPt = turf.point([bbox[0], bbox[1]]);
+                    distanceLim += _a.#distanceBetweenPoints(venuePt, topRightPt.geometry);
                 }
                 const distance = _a.#distanceBetweenPoints(linkPt.geometry, venuePt);
                 return distance > distanceLim;
