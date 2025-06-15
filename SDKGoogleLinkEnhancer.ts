@@ -19,7 +19,6 @@
 // import type { Venue, WmeSDK } from "wme-sdk-typings";
 // import $ from "jquery";
 
-
 const SDKGoogleLinkEnhancer = (() => {
     "use strict";
 
@@ -116,6 +115,27 @@ const SDKGoogleLinkEnhancer = (() => {
                 strokeDashStyle: (context) => {
                     return context?.feature?.properties?.style?.strokeDashstyle;
                 },
+                label: (context) => {
+                    return context?.feature?.properties?.style?.label;
+                },
+                labelYOffset: (context) => {
+                    return context?.feature?.properties?.style?.labelYOffset;
+                },
+                fontColor: (context) => {
+                    return context?.feature?.properties?.style?.fontColor;
+                },
+                fontWeight: (context) => {
+                    return context?.feature?.properties?.style?.fontWeight;
+                },
+                labelOutlineColor: (context) => {
+                    return context?.feature?.properties?.style?.labelOutlineColor;
+                },
+                labelOutlineWidth: (context) => {
+                    return context?.feature?.properties?.style?.labelOutlineWidth;
+                },
+                fontSize: (context) => {
+                    return context?.feature?.properties?.style?.fontSize;
+                },
             },
             styleRules: [
                 {
@@ -157,6 +177,35 @@ const SDKGoogleLinkEnhancer = (() => {
                         strokeDashStyle: "${strokeDashStyle}",
                     },
                 },
+                {
+                    predicate: (properties) => {
+                        return properties.styleName === "googlePlacePointStyle";
+                    },
+                    style: {
+                        pointRadius: "${pointRadius}",
+                        strokeWidth: "${strokeWidth}",
+                        strokeColor: "${strokeColor}",
+                        fillColor: "${fillColor}",
+                        strokeOpacity: "${strokeOpacity}",
+                    },
+                },
+                {
+                    predicate: (properties) => {
+                        return properties.styleName === "googlePlaceLineStyle";
+                    },
+                    style: {
+                                strokeWidth: "${strokeWidth}",
+                                strokeDashstyle: "${strokeDashStyle}",
+                                strokeColor: "${strokeColor}",
+                                label: "${label}",
+                                labelYOffset: "${labelYOffset}",
+                                fontColor: "${fontColor}",
+                                fontWeight: "${fontWeight}",
+                                labelOutlineColor: "${labelOutlineColor}",
+                                labelOutlineWidth: "${labelOutlineWidth}",
+                                fontSize: "${fontSize}",
+                    }
+                }
             ],
         };
         sdk: WmeSDK;
@@ -326,7 +375,7 @@ const SDKGoogleLinkEnhancer = (() => {
         #distanceBetweenPoints(point1: GeoJSON.Point, point2: GeoJSON.Point) {
             // const line = new OpenLayers.Geometry.LineString([point1, point2]);
             // const length = line.getGeodesicLength(W.map.getProjectionObject());
-            const ls = this.trf.lineString([point1.coordinates, point2.coordinates])
+            const ls = this.trf.lineString([point1.coordinates, point2.coordinates]);
             const length = this.trf.length(ls);
             return length * 1000; // multiply by 3.28084 to convert to feet
         }
@@ -625,9 +674,9 @@ const SDKGoogleLinkEnhancer = (() => {
         // Remove the POI point from the map.
         #destroyPoint() {
             if (this.#ptFeature) {
-                this.#ptFeature.destroy();
+                // this.#ptFeature.destroy();
                 this.#ptFeature = null;
-                this.#lineFeature.destroy();
+                // this.#lineFeature.destroy();
                 this.#lineFeature = null;
             }
         }
@@ -642,7 +691,7 @@ const SDKGoogleLinkEnhancer = (() => {
         }
 
         // Add the POI point to the map.
-        async #addPoint(id) {
+        async #addPoint(id: string | null | undefined) {
             if (!id) return;
             const link = await this.linkCache.getPlace(id);
             if (link) {
@@ -650,16 +699,18 @@ const SDKGoogleLinkEnhancer = (() => {
                     const coord = link.loc;
                     // const poiPt = new OpenLayers.Geometry.Point(coord.lng, coord.lat);
                     const poiPt = this.trf.point([coord.lng, coord.lat]);
-                    poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject().projCode);
+                    // poiPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject().projCode);
                     // const placeGeom = W.selectionManager.getSelectedDataModelObjects()[0].geometry.getCentroid();
                     const selection = this.sdk.Editing.getSelection();
-                    let placeGeom: GeoJSON.Geometry | undefined;
+                    let placeGeom: GeoJSON.Point;
                     if (selection?.objectType === "venue") {
                         const v = this.sdk.DataModel.Venues.getById({ venueId: selection.ids[0] });
                         placeGeom = v?.geometry && this.trf.centroid(v?.geometry)?.geometry;
+                    } else {
+                        return;
                     }
                     // const placePt = new OpenLayers.Geometry.Point(placeGeom.x, placeGeom.y);
-                    const placePt = this.trf.point(placeGeom);
+                    const placePt = this.trf.point(placeGeom.coordinates);
                     const ext = this.#getOLMapExtent();
                     // const lsBounds = new OpenLayers.Geometry.LineString([
                     //     new OpenLayers.Geometry.Point(ext.left, ext.bottom),
@@ -717,34 +768,68 @@ const SDKGoogleLinkEnhancer = (() => {
                     }
 
                     this.#destroyPoint(); // Just in case it still exists.
-                    this.#ptFeature = new OpenLayers.Feature.Vector(
-                        poiPt,
-                        { poiCoord: true },
+                    // this.#ptFeature = new OpenLayers.Feature.Vector(
+                    //     poiPt,
+                    //     { poiCoord: true },
+                    //     {
+                    //         pointRadius: 6,
+                    //         strokeWidth: 30,
+                    //         strokeColor: "#FF0",
+                    //         fillColor: "#FF0",
+                    //         strokeOpacity: 0.5,
+                    //     }
+                    // );
+                    this.#ptFeature = this.trf.point(
+                        poiPt.geometry.coordinates,
                         {
-                            pointRadius: 6,
-                            strokeWidth: 30,
-                            strokeColor: "#FF0",
-                            fillColor: "#FF0",
-                            strokeOpacity: 0.5,
-                        }
+                            styleName: "googlePlacePointStyle",
+                            style: {
+                                pointRadius: 6,
+                                strokeWidth: 30,
+                                strokeColor: "#FF0",
+                                fillColor: "#FF0",
+                                strokeOpacity: 0.5,
+                            },
+                        },
+                        { id: `PoiPT_${poiPt.toString()}` }
                     );
-                    this.#lineFeature = new OpenLayers.Feature.Vector(
-                        lsLine,
-                        {},
+                    // this.#lineFeature = new OpenLayers.Feature.Vector(
+                    //     lsLine,
+                    //     {},
+                    //     {
+                    //         strokeWidth: 3,
+                    //         strokeDashstyle: "12 8",
+                    //         strokeColor: "#FF0",
+                    //         label,
+                    //         labelYOffset: 45,
+                    //         fontColor: "#FF0",
+                    //         fontWeight: "bold",
+                    //         labelOutlineColor: "#000",
+                    //         labelOutlineWidth: 4,
+                    //         fontSize: "18",
+                    //     }
+                    // );
+                    this.#lineFeature = this.trf.lineString(
+                        lsLine.geometry.coordinates,
                         {
-                            strokeWidth: 3,
-                            strokeDashstyle: "12 8",
-                            strokeColor: "#FF0",
-                            label,
-                            labelYOffset: 45,
-                            fontColor: "#FF0",
-                            fontWeight: "bold",
-                            labelOutlineColor: "#000",
-                            labelOutlineWidth: 4,
-                            fontSize: "18",
-                        }
+                            styleName: "googlePlaceLineStyle",
+                            style: {
+                                strokeWidth: 3,
+                                strokeDashstyle: "12 8",
+                                strokeColor: "#FF0",
+                                label,
+                                labelYOffset: 45,
+                                fontColor: "#FF0",
+                                fontWeight: "bold",
+                                labelOutlineColor: "#000",
+                                labelOutlineWidth: 4,
+                                fontSize: "18",
+                            },
+                        },
+                        { id: `LsLine_${lsLine.toString()}` }
                     );
-                    W.map.getLayerByUniqueName("venues").addFeatures([this.#ptFeature, this.#lineFeature]);
+                    // W.map.getLayerByUniqueName("venues").addFeatures([this.#ptFeature, this.#lineFeature]);
+                    this.sdk.Map.addFeatures({featues: [this.#ptFeature, this.#lineFeature], layerName: "venues"});
                     this.#timeoutDestroyPoint();
                 }
             } else {
