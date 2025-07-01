@@ -86,8 +86,8 @@ const SDKGoogleLinkEnhancer = (() => {
         // Area place is calculated as #distanceLimit + <distance between centroid and furthest node>
         #showTempClosedPOIs = true;
         #originalHeadAppendChildMethod;
-        #ptFeature;
-        #lineFeature;
+        #ptFeature: GeoJSON.Feature<GeoJSON.Point> | undefined;
+        #lineFeature: GeoJSON.Feature<GeoJSON.LineString> | undefined;
         #timeoutID;
         strings = {
             permClosedPlace:
@@ -135,6 +135,9 @@ const SDKGoogleLinkEnhancer = (() => {
                 },
                 fontSize: (context) => {
                     return context?.feature?.properties?.style?.fontSize;
+                },
+                pointRadius: (context) => {
+                    return context?.feature?.properties?.style?.pointRadius;
                 },
             },
             styleRules: [
@@ -372,10 +375,10 @@ const SDKGoogleLinkEnhancer = (() => {
         }
 
         // Borrowed from WazeWrap
-        #distanceBetweenPoints(point1: GeoJSON.Point, point2: GeoJSON.Point) {
+        #distanceBetweenPoints(point1: GeoJSON.Position, point2: GeoJSON.Position) {
             // const line = new OpenLayers.Geometry.LineString([point1, point2]);
             // const length = line.getGeodesicLength(W.map.getProjectionObject());
-            const ls = this.trf.lineString([point1.coordinates, point2.coordinates]);
+            const ls = this.trf.lineString([point1, point2]);
             const length = this.trf.length(ls);
             return length * 1000; // multiply by 3.28084 to convert to feet
         }
@@ -385,7 +388,7 @@ const SDKGoogleLinkEnhancer = (() => {
         #isLinkTooFar(link, venue: Venue) {
             if (link.loc) {
                 // const linkPt = new OpenLayers.Geometry.Point(link.loc.lng, link.loc.lat);
-                const linkPt = turf.point([link.loc.lng, link.loc.lat]);
+                const linkPt = this.trf.point([link.loc.lng, link.loc.lat]);
                 // linkPt.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
                 let venuePt: GeoJSON.Point;
                 let distanceLim = this.distanceLimit;
@@ -404,9 +407,9 @@ const SDKGoogleLinkEnhancer = (() => {
                         bbox = this.trf.bbox(venue.geometry);
                     }
                     const topRightPt = this.trf.point([bbox[0], bbox[1]]);
-                    distanceLim += this.#distanceBetweenPoints(venuePt, topRightPt.geometry);
+                    distanceLim += this.#distanceBetweenPoints(venuePt.coordinates, topRightPt.geometry.coordinates);
                 }
-                const distance = this.#distanceBetweenPoints(linkPt, venuePt);
+                const distance = this.#distanceBetweenPoints(linkPt.geometry.coordinates, venuePt.coordinates);
                 return distance > distanceLim;
             }
             return false;
@@ -418,7 +421,7 @@ const SDKGoogleLinkEnhancer = (() => {
                     // Get a list of already-linked id's
                     const existingLinks = SDKGoogleLinkEnhancer.#getExistingLinks(this.sdk);
                     this.sdk.Map.removeAllFeaturesFromLayer({ layerName: GLE.#mapLayer });
-                    const drawnLinks = [];
+                    const drawnLinks: Venue[][] = [];
                     for (const venue of this.sdk.DataModel.Venues.getAll()) {
                         // W.model.venues.getObjectArray().forEach(venue => {
                         const promises = [];
@@ -437,7 +440,7 @@ const SDKGoogleLinkEnhancer = (() => {
                                 // const features = [new OpenLayers.Feature.Vector(geometry, {
                                 //     strokeWidth: width, strokeColor: color
                                 // })];
-                                const features: GeoJSON.Feature[] = [
+                                const features: GeoJSON.Feature<GeoJSON.Point | GeoJSON.Polygon | GeoJSON.LineString>[] = [
                                     GLE.isPointVenue(venue)
                                         ? this.trf.point(geometry.coordinates, {
                                               styleName: "venueStyle",
@@ -445,14 +448,14 @@ const SDKGoogleLinkEnhancer = (() => {
                                                   strokeWidth: width,
                                                   strokeColor: color,
                                               },
-                                          })
-                                        : this.trf.polygon(geometry, {
+                                          }, {id: `venue_${geometry.toString()}`})
+                                        : this.trf.polygon(geometry.coordinates, {
                                               styleName: "venueStyle",
                                               style: {
                                                   strokeColor: color,
                                                   strokeWidth: width,
                                               },
-                                          }),
+                                          }, {id: `polyvenue_${geometry.toString()}`}),
                                 ];
                                 const lineStart = this.trf.centroid(geometry);
                                 // linkInfo.venues.forEach(linkVenue => {
@@ -484,7 +487,8 @@ const SDKGoogleLinkEnhancer = (() => {
                                                         strokeColor: color,
                                                         strokeDashstyle: "12 12",
                                                     },
-                                                }
+                                                },
+                                                { id: `ls_${lineStart.geometry.toString()}_${endPoint.geometry.toString()}`}
                                             )
                                         );
                                         drawnLinks.push([venue, linkVenue]);
@@ -531,7 +535,7 @@ const SDKGoogleLinkEnhancer = (() => {
                                     strokeDashStyle,
                                 };
                                 // const geometry = venue.isPoint() ? venue.geometry.getCentroid() : venue.geometry.clone();
-                                const feature = GLE.isPointVenue(venue)
+                                const feature: Feature<GeoJSON.Point | GeoJSON.Polygon | GeoJSON.LineString> = GLE.isPointVenue(venue)
                                     ? this.trf.point(venue.geometry.coordinates, {
                                           styleName: "placeStyle",
                                           style: style,
@@ -674,6 +678,7 @@ const SDKGoogleLinkEnhancer = (() => {
         // Remove the POI point from the map.
         #destroyPoint() {
             if (this.#ptFeature) {
+                this.sdk.Map.removeFeaturesFromLayer({featureIds: [this.#ptFeature.id, this.#lineFeature.id], layerName: GLE.#mapLayer})
                 // this.#ptFeature.destroy();
                 this.#ptFeature = null;
                 // this.#lineFeature.destroy();
@@ -732,21 +737,19 @@ const SDKGoogleLinkEnhancer = (() => {
                     const splits = this.trf.lineSplit(lsLine, lsBounds);
                     let label = "";
                     if (splits) {
-                        let splitPoints: GeoJSON.Feature;
                         for (const split of splits.features) {
                             for (const component of split.geometry.coordinates) {
                                 if (
                                     component[0] === placePt.geometry.coordinates[0] &&
                                     component[1] === placePt.geometry.coordinates[1]
                                 )
-                                    splitPoints = split;
+                                    lsLine = split;
                             }
                         }
-                        lsLine = splitPoints;
-                        let distance = this.#distanceBetweenPoints(poiPt, placePt);
-                        let unitConversion;
-                        let unit1;
-                        let unit2;
+                        let distance = this.#distanceBetweenPoints(poiPt.geometry.coordinates, placePt.geometry.coordinates);
+                        let unitConversion: number;
+                        let unit1: string;
+                        let unit2: string;
                         // if (W.model.isImperial) {
                         if (this.sdk.Settings.getUserSettings().isImperial) {
                             distance *= 3.28084;
@@ -829,7 +832,7 @@ const SDKGoogleLinkEnhancer = (() => {
                         { id: `LsLine_${lsLine.toString()}` }
                     );
                     // W.map.getLayerByUniqueName("venues").addFeatures([this.#ptFeature, this.#lineFeature]);
-                    this.sdk.Map.addFeatures({featues: [this.#ptFeature, this.#lineFeature], layerName: "venues"});
+                    this.sdk.Map.addFeaturesToLayer({features: [this.#ptFeature, this.#lineFeature], layerName: GLE.#mapLayer});
                     this.#timeoutDestroyPoint();
                 }
             } else {
