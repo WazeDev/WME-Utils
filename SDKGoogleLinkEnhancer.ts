@@ -333,7 +333,7 @@ const SDKGoogleLinkEnhancer = (() => {
                 this.sdk.Events.on({
                     eventName: "wme-data-model-objects-changed",
                     eventHandler: (change) => {
-                        this.#formatLinkElements().bind(this);
+                        this.#formatLinkElements.bind(this);
                     },
                 });
                 this.#processPlaces();
@@ -348,7 +348,7 @@ const SDKGoogleLinkEnhancer = (() => {
                 this.sdk.Events.on({
                     eventName: "wme-data-model-objects-changed",
                     eventHandler: (change) => {
-                        this.#formatLinkElements().bind(this);
+                        this.#formatLinkElements.bind(this);
                     },
                 });
 
