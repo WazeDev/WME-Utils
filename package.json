@@ -1,12 +1,12 @@
 {
   "devDependencies": {
     "@biomejs/biome": "^2.0.6",
+    "@googlemaps/google-maps-services-js": "^3.4.1",
     "@turf/turf": "^7.2.0",
     "@types/jquery": "^3.5.32",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@googlemaps/extended-component-library": "^0.6.14",
     "jquery": "^3.7.1",
     "wme-sdk-typings": "https://web-assets.waze.com/wme_sdk_docs/beta/latest/wme-sdk-typings.tgz"
   }

@@ -14,8 +14,9 @@
 /* eslint-disable max-classes-per-file */
 // eslint-disable-next-line func-names
 // import * as turf from "@turf/turf";
-// import type { Venue, WmeSDK } from "wme-sdk-typings";
+// import type { Venue, WmeSDK, DataModelName} from "wme-sdk-typings";
 // import $ from "jquery";
+// import * as googlemaps from "@googlemaps/google-maps-services-js"
 const SDKGoogleLinkEnhancer = (() => {
     "use strict";
     var _a;
@@ -67,10 +68,10 @@ const SDKGoogleLinkEnhancer = (() => {
         #distanceLimit = 400; // Default distance (meters) when Waze place is flagged for being too far from Google place.
         // Area place is calculated as #distanceLimit + <distance between centroid and furthest node>
         #showTempClosedPOIs = true;
-        #originalHeadAppendChildMethod;
+        // #originalHeadAppendChildMethod;
         #ptFeature;
         #lineFeature;
-        #timeoutID;
+        #timeoutID = -1;
         strings = {
             permClosedPlace: "Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.",
             tempClosedPlace: "Google indicates this place is temporarily closed.",
@@ -199,7 +200,7 @@ const SDKGoogleLinkEnhancer = (() => {
             if (!sdk) {
                 msg += "SDK Must be defined to use GLE";
             }
-            if (!turf) {
+            if (!trf) {
                 msg += "\n";
                 msg += "Turf Library Must be made available to GLE to Implement Some of the Functionality";
             }
@@ -217,21 +218,27 @@ const SDKGoogleLinkEnhancer = (() => {
             // W.model.venues.on('objectsadded', () => { this.#processPlaces(); });
             this.sdk.Events.on({
                 eventName: "wme-data-model-objects-added",
-                eventHandler: () => {
-                    this.#processPlaces();
-                },
+                eventHandler: (payload) => {
+                    if (payload.dataModelName === "venues") {
+                        this.#processPlaces(payload.objectIds);
+                    }
+                }
             });
             this.sdk.Events.on({
                 eventName: "wme-data-model-objects-removed",
-                eventHandler: () => {
-                    this.#processPlaces();
+                eventHandler: (payload) => {
+                    if (payload.dataModelName === "venues") {
+                        this.#processPlaces(payload.objectIds);
+                    }
                 },
             });
             this.sdk.Events.on({
                 eventName: "wme-data-model-objects-changed",
-                eventHandler: () => {
-                    this.#processPlaces();
-                },
+                eventHandler: (payload) => {
+                    if (payload.dataModelName === "venues") {
+                        this.#processPlaces(payload.objectIds);
+                    }
+                }
             });
             // This is a special event that will be triggered when DOM elements are destroyed.
             /* eslint-disable wrap-iife, func-names, object-shorthand */
@@ -303,8 +310,10 @@ const SDKGoogleLinkEnhancer = (() => {
                 // W.model.venues.on('objectschanged', this.#formatLinkElements, this);
                 this.sdk.Events.on({
                     eventName: "wme-data-model-objects-changed",
-                    eventHandler: (change) => {
-                        this.#formatLinkElements.bind(this);
+                    eventHandler: (payload) => {
+                        if (payload.dataModelName === "venues") {
+                            this.#formatLinkElements.bind(this);
+                        }
                     },
                 });
                 this.#processPlaces();
@@ -317,7 +326,7 @@ const SDKGoogleLinkEnhancer = (() => {
                 // W.model.venues.off('objectschanged', this.#formatLinkElements, this);
                 this.sdk.Events.on({
                     eventName: "wme-data-model-objects-changed",
-                    eventHandler: (change) => {
+                    eventHandler: ({}) => {
                         this.#formatLinkElements.bind(this);
                     },
                 });
@@ -379,16 +388,25 @@ const SDKGoogleLinkEnhancer = (() => {
             }
             return false;
         }
-        #processPlaces() {
+        #processPlaces(objectIds = undefined) {
             if (this.#enabled) {
                 try {
                     // Get a list of already-linked id's
                     const existingLinks = SDKGoogleLinkEnhancer.#getExistingLinks(this.sdk);
                     this.sdk.Map.removeAllFeaturesFromLayer({ layerName: _a.#mapLayer });
                     const drawnLinks = [];
-                    for (const venue of this.sdk.DataModel.Venues.getAll()) {
+                    if (!objectIds) {
+                        objectIds = [];
+                        for (const venue of this.sdk.DataModel.Venues.getAll()) {
+                            objectIds.push(venue.id);
+                        }
+                    }
+                    for (const objId of objectIds) {
                         // W.model.venues.getObjectArray().forEach(venue => {
                         const promises = [];
+                        const venue = this.sdk.DataModel.Venues.getById({ venueId: objId.toString() });
+                        if (venue === null)
+                            continue;
                         // venue.attributes.externalProviderIDs.forEach(provID => {
                         for (const provID of venue.externalProviderIds) {
                             const id = provID;
@@ -404,7 +422,7 @@ const SDKGoogleLinkEnhancer = (() => {
                                 //     strokeWidth: width, strokeColor: color
                                 // })];
                                 const features = [
-                                    _a.isPointVenue(venue)
+                                    geometry.type === "Point"
                                         ? this.trf.point(geometry.coordinates, {
                                             styleName: "venueStyle",
                                             style: {
@@ -784,7 +802,7 @@ const SDKGoogleLinkEnhancer = (() => {
         }
         // Destroy the point after some time, if it hasn't been destroyed already.
         #timeoutDestroyPoint() {
-            if (this.#timeoutID)
+            if (this.#timeoutID > 0)
                 clearTimeout(this.#timeoutID);
             this.#timeoutID = setTimeout(() => this.#destroyPoint(), 4000);
         }
