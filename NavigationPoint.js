@@ -18,8 +18,8 @@ class NavigationPoint
         }
 
         with(){
-            const e = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : {};
-            if(e.point === null)
+            var e = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : {};
+            if(e.point == null)
                 e.point = this.toJSON().point;
             return new this.constructor((this.toJSON().point, e.point));
         }
