@@ -232,8 +232,14 @@ const SDKGoogleLinkEnhancer = (() => {
 
             // NOTE: Arrow functions are necessary for calling methods on object instances.
             // This could be made more efficient by only processing the relevant places.
-            W.model.events.register("mergeend", null, () => {
-                this.#processPlaces();
+            // W.model.events.register("mergeend", null, () => {
+            //     this.#processPlaces();
+            // });
+            this.sdk.Events.on({
+                eventName: "wme-map-data-loaded",
+                eventHandler: () => {
+                    this.#processPlaces();
+                }
             });
             // W.model.venues.on('objectschanged', () => { this.#processPlaces(); });
             // W.model.venues.on('objectsremoved', () => { this.#processPlaces(); });
