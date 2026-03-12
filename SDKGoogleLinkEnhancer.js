@@ -507,8 +507,6 @@ const SDKGoogleLinkEnhancer = (() => {
         }
         // Proactively fetches Google place data for each uncached place ID so that
         // GLE can highlight closed/far venues in the viewport without requiring user selection.
-        // Proactively fetches Google place data for each uncached place ID so that
-        // GLE can highlight closed/far venues in the viewport without requiring user selection.
         // Always uses the legacy PlacesService.getDetails — the new Place.fetchFields API calls
         // places.googleapis.com which is not in WME's Content Security Policy connect-src list
         // and will be blocked by the browser. The Place.fetchFields interceptor in
