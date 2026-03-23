@@ -1,6 +1,6 @@
 "use strict";
 // ==UserScript==
-// @name         WME Utils - Google Link Enhancer
+// @name         WME Utils - SDK Google Link Enhancer
 // @namespace    WazeDev
 // @version      2026.03.23.00
 // @description  Adds some extra WME functionality related to Google place links.
