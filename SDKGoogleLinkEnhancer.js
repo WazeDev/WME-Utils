@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         WME Utils - Google Link Enhancer
 // @namespace    WazeDev
-// @version      2026.03.10.00
+// @version      2026.03.23.00
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -66,6 +66,10 @@ const SDKGoogleLinkEnhancer = (() => {
         #ptFeature;
         #lineFeature;
         #timeoutID = -1;
+        #processDebounceID = -1;          // debounce timer handle for #processPlaces
+        #prefetchQueue = [];               // IDs waiting to be dispatched to Google API
+        #prefetchInflight = 0;             // count of in-flight getDetails requests
+        static #PREFETCH_CONCURRENCY = 50; // max simultaneous getDetails calls
         strings = {
             permClosedPlace: "Google indicates this place is permanently closed.\nVerify with other sources or your editor community before deleting.",
             tempClosedPlace: "Google indicates this place is temporarily closed.",
@@ -216,7 +220,7 @@ const SDKGoogleLinkEnhancer = (() => {
                 eventName: "wme-data-model-objects-added",
                 eventHandler: (payload) => {
                     if (payload.dataModelName === "venues") {
-                        this.#processPlaces(payload.objectIds);
+                        this.#processPlaces();
                     }
                 }
             });
@@ -224,7 +228,7 @@ const SDKGoogleLinkEnhancer = (() => {
                 eventName: "wme-data-model-objects-removed",
                 eventHandler: (payload) => {
                     if (payload.dataModelName === "venues") {
-                        this.#processPlaces(payload.objectIds);
+                        this.#processPlaces();
                     }
                 },
             });
@@ -232,7 +236,7 @@ const SDKGoogleLinkEnhancer = (() => {
                 eventName: "wme-data-model-objects-changed",
                 eventHandler: (payload) => {
                     if (payload.dataModelName === "venues") {
-                        this.#processPlaces(payload.objectIds);
+                        this.#processPlaces();
                     }
                 }
             });
@@ -320,6 +324,10 @@ const SDKGoogleLinkEnhancer = (() => {
                     });
                     this.#venueChangeHandler = null;
                 }
+                if (this.#processDebounceID !== -1) {
+                    clearTimeout(this.#processDebounceID);
+                    this.#processDebounceID = -1;
+                }
                 this.#enabled = false;
                 this.sdk.Map.removeAllFeaturesFromLayer({ layerName: this.#mapLayer });
             }
@@ -370,9 +378,16 @@ const SDKGoogleLinkEnhancer = (() => {
             }
             return false;
         }
-        #processPlaces(objectIds = undefined) {
-            if (this.#enabled) {
-                try {
+        #processPlaces() {
+            if (!this.#enabled) return;
+            if (this.#processDebounceID !== -1) clearTimeout(this.#processDebounceID);
+            this.#processDebounceID = setTimeout(() => {
+                this.#processDebounceID = -1;
+                this.#doProcessPlaces();
+            }, 150);
+        }
+        #doProcessPlaces() {
+            try {
                     // Only draw map rings when the layer is visible in the Map Layers panel.
                     // Always clear first (even when hidden) so in-flight API responses can't
                     // ghost features back onto a layer the user has just hidden.
@@ -383,11 +398,11 @@ const SDKGoogleLinkEnhancer = (() => {
                     const existingLinks = SDKGoogleLinkEnhancer.#getExistingLinks(this.sdk);
                     this.sdk.Map.removeAllFeaturesFromLayer({ layerName: this.#mapLayer });
                     const drawnLinks = [];
-                    if (!objectIds) {
-                        objectIds = [];
-                        for (const venue of this.sdk.DataModel.Venues.getAll()) {
-                            objectIds.push(venue.id);
-                        }
+                    // Clear stale queue entries from previous viewport before building uncachedIds.
+                    this.#prefetchQueue = [];
+                    const objectIds = [];
+                    for (const venue of this.sdk.DataModel.Venues.getAll()) {
+                        objectIds.push(venue.id);
                     }
                     const uncachedIds = new Set();
                     for (const objId of objectIds) {
@@ -498,12 +513,16 @@ const SDKGoogleLinkEnhancer = (() => {
                     // Proactively fetch Google data for venues not yet in cache.
                     // When responses arrive the interceptor populates the cache and
                     // triggers another #processPlaces pass to render the highlights.
-                    this.#prefetchPlaceData([...uncachedIds]);
+                    // Skip prefetch when the layer is hidden — sidebar coloring works
+                    // reactively via the interceptor, so there's no benefit fetching
+                    // data for rings that aren't being displayed.
+                    if (layerVisible) {
+                        this.#prefetchPlaceData([...uncachedIds]);
+                    }
                 }
                 catch (ex) {
                     console.error("PIE (Google Link Enhancer) error:", ex);
                 }
-            }
         }
         // Proactively fetches Google place data for each uncached place ID so that
         // GLE can highlight closed/far venues in the viewport without requiring user selection.
@@ -511,14 +530,35 @@ const SDKGoogleLinkEnhancer = (() => {
         // places.googleapis.com which is not in WME's Content Security Policy connect-src list
         // and will be blocked by the browser. The Place.fetchFields interceptor in
         // #interceptGooglePlacesAPIs remains active in case WME itself ever migrates to the new API.
+        // Requests are capped at #PREFETCH_CONCURRENCY simultaneous in-flight calls; the rest
+        // are queued and drained automatically as each response arrives.
         #prefetchPlaceData(placeIds) {
             if (!placeIds.length) return;
             if (typeof google === "undefined" || !google.maps?.places?.PlacesService) return;
+            for (const id of placeIds) {
+                if (!this.#prefetchQueue.includes(id)) {
+                    this.#prefetchQueue.push(id);
+                }
+            }
+            this.#drainPrefetchQueue();
+        }
+        #drainPrefetchQueue() {
+            if (this.#prefetchInflight >= SDKGoogleLinkEnhancer.#PREFETCH_CONCURRENCY
+                || this.#prefetchQueue.length === 0) return;
+            if (typeof google === "undefined" || !google.maps?.places?.PlacesService) return;
             const service = new google.maps.places.PlacesService(document.createElement("div"));
-            for (const placeId of placeIds) {
+            while (this.#prefetchInflight < SDKGoogleLinkEnhancer.#PREFETCH_CONCURRENCY
+                   && this.#prefetchQueue.length > 0) {
+                const placeId = this.#prefetchQueue.shift();
+                this.#prefetchInflight++;
                 service.getDetails(
                     { placeId, fields: ["place_id", "geometry", "business_status"] },
-                    () => {} // response handled by the interceptor in #interceptGooglePlacesAPIs
+                    () => {
+                        // Interceptor in #interceptGooglePlacesAPIs handles cache population
+                        // and triggers #processPlaces(). This callback only manages queue state.
+                        this.#prefetchInflight--;
+                        this.#drainPrefetchQueue();
+                    }
                 );
             }
         }
@@ -798,8 +838,9 @@ const SDKGoogleLinkEnhancer = (() => {
                     // Re-render map highlights now that Google data has arrived for this place.
                     // #processPlaces ran earlier (on map load) before the cache was populated,
                     // so a new pass is needed each time a getDetails response comes back.
+                    // The debounce inside #processPlaces coalesces rapid back-to-back calls.
                     if (cacheUpdated) {
-                        setTimeout(() => that.#processPlaces(), 0);
+                        that.#processPlaces();
                     }
                     callback(result, status); // Pass the result to the original callback
                 };
@@ -830,7 +871,7 @@ const SDKGoogleLinkEnhancer = (() => {
                         link.tempclosed = true;
                     }
                     that.linkCache.addPlace(this.id, link);
-                    setTimeout(() => that.#processPlaces(), 0);
+                    that.#processPlaces();
                     return result;
                 } catch (err) {
                     // Only cache as notFound for a definitive NOT_FOUND response.
@@ -838,7 +879,7 @@ const SDKGoogleLinkEnhancer = (() => {
                     const status = String(err?.status ?? err?.code ?? err?.message ?? "").toUpperCase();
                     if (status.includes("NOT_FOUND")) {
                         that.linkCache.addPlace(this.id, { notFound: true });
-                        setTimeout(() => that.#processPlaces(), 0);
+                        that.#processPlaces();
                     }
                     throw err; // Re-throw so WME and other callers still receive the error.
                 }
