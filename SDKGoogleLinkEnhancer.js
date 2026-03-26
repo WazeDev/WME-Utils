@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         WME Utils - SDK Google Link Enhancer
 // @namespace    WazeDev
-// @version      2026.03.23.00
+// @version      2026.03.26.00
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -289,7 +289,8 @@ const SDKGoogleLinkEnhancer = (() => {
         #onWmeSelectionChanged() {
             if (this.#enabled) {
                 this.#destroyPoint();
-                const selected = this.sdk.Editing.getSelection();
+                let selected;
+                try { selected = this.sdk.Editing.getSelection(); } catch (e) { return; }
                 if (selected?.objectType === "venue") {
                     // The setTimeout is necessary (in beta WME currently, at least) to allow the
                     // panel UI DOM to update after a place is selected.
