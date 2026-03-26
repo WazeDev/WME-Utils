@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         WME Utils - SDK Google Link Enhancer
 // @namespace    WazeDev
-// @version      2026.03.26.00
+// @version      2026.03.26.1
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -253,7 +253,8 @@ const SDKGoogleLinkEnhancer = (() => {
             })(jQuery);
             /* eslint-enable wrap-iife, func-names, object-shorthand */
             // In case a place is already selected on load.
-            const currentSelection = this.sdk.Editing.getSelection();
+            let currentSelection;
+            try { currentSelection = this.sdk.Editing.getSelection(); } catch (e) { currentSelection = null; }
             if (currentSelection?.ids?.length && currentSelection.objectType === "venue") {
                 this.#formatLinkElements();
             }
@@ -617,7 +618,8 @@ const SDKGoogleLinkEnhancer = (() => {
                                 .attr("title", this.strings.badLink);
                         }
                         else {
-                            const selection = this.sdk.Editing.getSelection();
+                            let selection;
+                            try { selection = this.sdk.Editing.getSelection(); } catch (e) { selection = null; }
                             if (selection?.objectType === "venue") {
                                 const venue = this.sdk.DataModel.Venues.getById({ venueId: selection.ids[0] });
                                 if (venue && this.#isLinkTooFar(link, venue)) {
@@ -646,7 +648,8 @@ const SDKGoogleLinkEnhancer = (() => {
                 throw new Error(msg);
             }
             const existingLinks = {};
-            const thisVenue = sdk.Editing.getSelection();
+            let thisVenue;
+            try { thisVenue = sdk.Editing.getSelection(); } catch (e) { return {}; }
             if (thisVenue?.objectType !== "venue")
                 return {};
             for (const venue of sdk.DataModel.Venues.getAll()) {
@@ -691,7 +694,8 @@ const SDKGoogleLinkEnhancer = (() => {
                 if (!link.notFound) {
                     const coord = link.loc;
                     const poiPt = this.trf.point([coord.lng, coord.lat]);
-                    const selection = this.sdk.Editing.getSelection();
+                    let selection;
+                    try { selection = this.sdk.Editing.getSelection(); } catch (e) { selection = null; }
                     let placeGeom;
                     if (selection?.objectType === "venue") {
                         const v = this.sdk.DataModel.Venues.getById({ venueId: selection.ids[0] });
@@ -785,7 +789,8 @@ const SDKGoogleLinkEnhancer = (() => {
         }
         #getIdFromElement($el) {
             const providerIndex = $el.parent().children().toArray().indexOf($el[0]);
-            const selection = this.sdk.Editing.getSelection();
+            let selection;
+            try { selection = this.sdk.Editing.getSelection(); } catch (e) { return null; }
             if (!selection || selection.objectType !== "venue") return null;
             const venue = this.sdk.DataModel.Venues.getById({ venueId: selection.ids[0] });
             return venue?.externalProviderIds?.[providerIndex] ?? null;
