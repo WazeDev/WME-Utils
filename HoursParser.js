@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            WME Utils - HoursParser
 // @namespace       WazeDev
-// @version         2024.06.16.000
+// @version         2026.06.09.000
 // @description     Parses a text string into hours, for use in Waze Map Editor scripts
 // @author          MapOMatic (originally developed by bmtg)
 // @license         GNU GPLv3
@@ -35,8 +35,7 @@ class HoursParser {
         };
         this.DAY_CODE_VECTOR = ['MM','TT','WW','RR','FF','SS','UU','MM','TT','WW','RR','FF','SS','UU','MM','TT','WW','RR','FF'];
         this.THRU_WORDS = ['through', 'thru', 'to', 'until', 'till', 'til', '-', '~'];
-        // eslint-disable-next-line global-require
-        this.OpeningHours = require('Waze/Model/Objects/OpeningHour');
+        // OpeningHour class no longer needed — SDK accepts plain objects with { days, fromHour, toHour }
     }
 
     parseHours(inputHours, locale) {
@@ -348,7 +347,7 @@ class HoursParser {
             hoursObjectAdd.fromHour = toFromSplit[1];
             hoursObjectAdd.toHour = toFromSplit[2];
             hoursObjectAdd.days = daysObjArray.sort();
-            hoursObjectArray.push(new this.OpeningHours(hoursObjectAdd));
+            hoursObjectArray.push(hoursObjectAdd);
             // track the order
             if (hoursObjectAdd.days.length > 1 && hoursObjectAdd.days[0] === 0) {
                 hoursObjectArrayMinDay.push( hoursObjectAdd.days[1] * 100 + parseInt(toFromSplit[1][0])*10 + parseInt(toFromSplit[1][1]) );
@@ -372,7 +371,7 @@ class HoursParser {
             for ( var ohix=0; ohix<hoursObjectArraySorted.length; ohix++ ) {
                 if ( hoursObjectArraySorted[ohix].days.length === 2 && hoursObjectArraySorted[ohix].days[0] === 0 && hoursObjectArraySorted[ohix].days[1] === 1) {
                     // separate hours
-                    hoursObjectArraySorted.push(new this.OpeningHours({days: [0], fromHour: hoursObjectArraySorted[ohix].fromHour, toHour: hoursObjectArraySorted[ohix].toHour}));
+                    hoursObjectArraySorted.push({days: [0], fromHour: hoursObjectArraySorted[ohix].fromHour, toHour: hoursObjectArraySorted[ohix].toHour});
                     hoursObjectArraySorted[ohix].days = [1];
                 }
             }
