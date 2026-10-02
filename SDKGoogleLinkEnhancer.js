@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         WME Utils - SDK Google Link Enhancer
 // @namespace    WazeDev
-// @version      2026.03.26.1
+// @version      2026.10.02.1
 // @description  Adds some extra WME functionality related to Google place links.
 // @author       WazeDev group
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -569,6 +569,10 @@ const SDKGoogleLinkEnhancer = (() => {
             event.data.#destroyPoint();
         }
         async #formatLinkElements() {
+            // Wait for React to finish rendering external provider elements into the DOM
+            // This ensures the <a> tag links are present and the position-based index is stable
+            await new Promise(r => setTimeout(r, 100));
+
             const $links = $("#edit-panel").find(this.#EXT_PROV_ELEM_QUERY);
             if ($links.length) {
                 const existingLinks = _a.#getExistingLinks(this.sdk);
@@ -828,12 +832,22 @@ const SDKGoogleLinkEnhancer = (() => {
                                 if (_a.#debug) console.debug("GLE: temporarily closed place detected:", request.placeId);
                             }
                             that.linkCache.addPlace(request.placeId, link);
+                            // Also store under CID if present in result.url, so lookups work with either ID format
+                            const cidMatch = result.url?.match(/[?&]cid=(\d+)/);
+                            if (cidMatch && cidMatch[1]) {
+                                that.linkCache.addPlace(cidMatch[1], link);
+                            }
                             cacheUpdated = true;
                             break;
                         }
                         case google.maps.places.PlacesServiceStatus.NOT_FOUND:
                             link.notFound = true;
                             that.linkCache.addPlace(request.placeId, link);
+                            // Also store under CID if present in result.url, so lookups work with either ID format
+                            const cidMatchNotFound = result.url?.match(/[?&]cid=(\d+)/);
+                            if (cidMatchNotFound && cidMatchNotFound[1]) {
+                                that.linkCache.addPlace(cidMatchNotFound[1], link);
+                            }
                             cacheUpdated = true;
                             if (_a.#debug) console.debug("GLE: invalid/not-found Google link:", request.placeId);
                             break;
